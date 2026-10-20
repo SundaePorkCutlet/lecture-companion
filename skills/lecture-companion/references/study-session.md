@@ -27,7 +27,11 @@ Use the actual receipt and IDs returned, never the example IDs blindly. Every pr
 
 Each operation key must be stable across retries and distinct across different work. Same key + same payload returns the original result even after other commands; different content with that key fails. `expectedRevision` is optional: it checks a particular current study revision. A pending receipt keeps its original revision after mode changes, notes or evidence reads. If using an explicit revision, get the latest `study status` before saving. Without the field the command checks its loaded revision under the lock.
 
-## Questions and catch-up
+## Separate question chat (default when requested)
+
+Keep the worker in follow/catch-up mode. Use [question-chat.md](question-chat.md) for `study chat`, native host creation/binding, fresh `study context` reads and independent `study qa` payloads. The question role never consumes this worker's receipt or changes its mode. `study export` merges both stores and reports the included Q&A revision.
+
+## Single-chat questions and catch-up (fallback)
 
 Use `study mode --out SESSION --mode question --file QUESTION_JSON`:
 

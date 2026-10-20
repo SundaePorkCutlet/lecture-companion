@@ -2,10 +2,17 @@ import {randomUUID} from 'node:crypto';
 import {StudyStore,checkBudget,bytes,replayOperation,journalHash} from './study-store.mjs';
 import {validateItems,validateDispositions,safeFrame,mergeReadRange} from './study-records.mjs';
 import {exportStudy} from './study-export.mjs';
+import {readQuestionContext} from './question-context.mjs';
+import {recordQuestion} from './questions-store.mjs';
+import {prepareQuestionChat,bindQuestionChat} from './question-chat.mjs';
 
 export class StudySession{
   constructor(dir){this.store=new StudyStore(dir);}
   init(){return this.store.init();}
+  context(options){return readQuestionContext(this.store,options);}
+  qa(payload){return recordQuestion(this.store,payload);}
+  prepareChat(options){return prepareQuestionChat(this.store,options);}
+  bindChat(payload){return bindQuestionChat(this.store,payload);}
   status(){
     const {state,events}=this.store.read(),capturedCursor=events.at(-1).id;
     const uncertaintyTypes=['caption-overflow','observation-gap','interruption'];

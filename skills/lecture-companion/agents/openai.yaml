@@ -1,3 +1,4 @@
 interface:
   display_name: "Lecture Companion"
-  short_description: "Help with Lecture Companion tasks"
+  short_description: "강의 처리와 질문 채팅을 분리하고 학습 기록을 합칩니다"
+  default_prompt: "$lecture-companion으로 강의를 함께 공부해줘. 강의 수집·정리를 계속하면서 질문용 별도 채팅을 자동으로 열고, 최신 강의 문맥과 질문·답변을 최종 노트에 반영해줘."
