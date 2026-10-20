@@ -1,5 +1,5 @@
 import {createHash,randomUUID} from 'node:crypto';
-import {readFileSync,writeFileSync,renameSync,unlinkSync,openSync,closeSync,existsSync} from 'node:fs';
+import {readFileSync,writeFileSync,renameSync,unlinkSync,openSync,closeSync,existsSync,linkSync} from 'node:fs';
 import {join,resolve} from 'node:path';
 import {Journal} from './core.mjs';
 
@@ -8,10 +8,19 @@ export const canonical = value => JSON.stringify(value,(_key,item)=>
     ? Object.fromEntries(Object.keys(item).sort().map(key=>[key,item[key]])) : item);
 export const digest = value => createHash('sha256').update(canonical(value)).digest('hex');
 export const journalHash = (events,through) => digest(events.slice(0,through));
+export function protectObservedJournal(state,events){
+  state.journal.observedThrough=events.length;
+  state.journal.observedHash=journalHash(events,events.length);
+}
 
-export function atomicWrite(path,text){
+export function atomicWrite(path,text,{exclusive=false}={}){
   const temp=`${path}.${randomUUID()}.tmp`;
-  try{writeFileSync(temp,text,{flag:'wx',mode:0o600});renameSync(temp,path);}
+  try{
+    writeFileSync(temp,text,{flag:'wx',mode:0o600});
+    // A hard link publishes a complete new file without replacing a manual
+    // file created concurrently. The temporary file is on the same filesystem.
+    if(exclusive)linkSync(temp,path);else renameSync(temp,path);
+  }
   finally{if(existsSync(temp))unlinkSync(temp);}
 }
 
@@ -25,12 +34,14 @@ export class StudyStore{
   }
   read(){
     const state=JSON.parse(readFileSync(this.path,'utf8')),events=this.events();
-    if(state.version!==1||!state.sessionId||!Number.isInteger(state.revision)||state.revision<0||!Number.isInteger(state.committedCursor)||state.committedCursor<0)throw new Error('Invalid study state');
+    if(state.version!==2||!state.sessionId||!Number.isInteger(state.revision)||state.revision<0||!Number.isInteger(state.committedCursor)||state.committedCursor<0)throw new Error('Invalid or unsupported study state version');
     if(state.journal.firstHash!==digest(events[0]))throw new Error('Capture journal identity changed');
     const through=state.pending?.packet.capturedThrough??state.committedCursor;
     if(events.length<through)throw new Error('Capture journal truncated');
     if(state.journal.committedHash!==journalHash(events,state.committedCursor))throw new Error('Committed journal evidence changed');
     if(state.pending&&state.pending.journalHash!==journalHash(events,through))throw new Error('Offered journal evidence changed');
+    if(events.length<state.journal.observedThrough)throw new Error('Observed journal truncated');
+    if(state.journal.observedHash!==journalHash(events,state.journal.observedThrough))throw new Error('Observed journal evidence changed');
     return {state,events};
   }
   locked(fn){
@@ -41,8 +52,9 @@ export class StudyStore{
     return this.locked(()=>{
       if(existsSync(this.path))throw new Error('Study already initialized');
       const events=this.events();
-      const state={version:1,sessionId:randomUUID(),revision:0,mode:'follow',committedCursor:0,
+      const state={version:2,sessionId:randomUUID(),revision:0,mode:'follow',committedCursor:0,
         journal:{firstHash:digest(events[0]),committedHash:journalHash(events,0)},pending:null,items:[],operations:[],exports:[]};
+      protectObservedJournal(state,events);
       atomicWrite(this.path,JSON.stringify(state,null,2));return {sessionId:state.sessionId,revision:0};
     });
   }
@@ -55,6 +67,7 @@ export class StudyStore{
       const expected=expectedRevision??loaded;
       if(!Number.isInteger(expected)||expected!==state.revision)throw new Error('Stale study revision');
       state.revision++;
+      protectObservedJournal(state,events);
       atomicWrite(this.path,JSON.stringify(state,null,2));return result.value;
     });
   }

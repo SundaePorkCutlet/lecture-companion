@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync,readFileSync,existsSync} from 'node:fs';
+import {mkdtempSync,readFileSync,existsSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {PNG} from 'pngjs';
@@ -16,7 +16,10 @@ test('collector persists actual caption changes and frames without sending raw s
     evaluate:async()=>({x:0,y:0,width:100,height:100,scale:1}),
     cdp:async()=>({data:png.toString('base64')})
   };
-  await capture.runCapture({page,out,captionMode:'snapshot',durationSec:0.15,pollMs:10,frameMs:20,batchMs:50,onNotice:x=>notices.push(x)});
+  await capture.runCapture({page,out,captionMode:'snapshot',durationSec:3,pollMs:10,frameMs:20,batchMs:50,onNotice:x=>{
+    notices.push(x);
+    if(x.type==='batch-ready'&&x.frames===1&&x.captions===2)writeFileSync(join(out,'STOP'),'Observed expected evidence');
+  }});
   const events=new Journal(out).read();
   assert.deepEqual(events.filter(e=>e.type==='caption').map(e=>e.text),['첫 번째 자막','두 번째 자막']);
   assert.equal(events.filter(e=>e.type==='frame').length,1);

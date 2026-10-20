@@ -40,6 +40,7 @@ export class StudySession{
         revision:state.revision,capturedThrough:events.at(-1).id,committedCursor:state.committedCursor}};
       if(state.pending){
         if(bytes(state.pending.packet)>maxBytes)throw new Error('Pending receipt exceeds requested byte limit; reuse its original limit');
+        for(const event of state.pending.packet.events)if(event.type==='frame')safeFrame(this.store.dir,events[event.id-1].file);
         return {replay:true,value:state.pending.packet};
       }
       const tail=events.filter(event=>event.id>state.committedCursor);
@@ -94,6 +95,7 @@ export class StudySession{
     return this.store.update((state,events)=>{
       const pending=state.pending,packet=pending?.packet;
       if(!packet||packet.receipt!==receipt||!packet.events.some(event=>event.id===eventId))throw new Error('Evidence is not in this receipt');
+      if(events[eventId-1].type==='frame')safeFrame(this.store.dir,events[eventId-1].file);
       const chars=Array.from(JSON.stringify(events[eventId-1]));
       if(!Number.isInteger(offset)||offset<0||offset>=chars.length)throw new Error('Invalid evidence character offset');
       const response={sessionId:state.sessionId,receipt,eventId,revision:state.revision+1,offset,nextOffset:offset,totalCharacters:chars.length,text:'',complete:false};

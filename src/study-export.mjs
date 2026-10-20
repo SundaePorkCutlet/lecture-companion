@@ -1,6 +1,6 @@
-import {existsSync,readFileSync,lstatSync,writeFileSync} from 'node:fs';
+import {existsSync,readFileSync,lstatSync} from 'node:fs';
 import {resolve,join} from 'node:path';
-import {atomicWrite,digest} from './study-store.mjs';
+import {atomicWrite,digest,protectObservedJournal} from './study-store.mjs';
 import {safeFrame} from './study-records.mjs';
 
 const plain=value=>String(value).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/[\\`*_{}\[\]()#!|]/g,'\\$&');
@@ -60,13 +60,15 @@ export function exportStudy(store,{notesPath=join(store.dir,'notes.md'),jsonPath
     for(const output of outputs){
       let owner=state.exports.find(owner=>owner.path===output.path);
       if(!owner){owner={path:output.path,hash:null};state.exports.push(owner);}
-      output.previousExists=existsSync(output.path);owner.pendingHash=digest(output.text);
+      // Carry forward the hash just validated, including a previous attempt's
+      // pending content, before replacing that attempt's reservation.
+      if(existsSync(output.path))owner.hash=digest(readFileSync(output.path,'utf8'));
+      owner.pendingHash=digest(output.text);
     }
-    state.revision++;atomicWrite(store.path,JSON.stringify(state,null,2));
+    state.revision++;protectObservedJournal(state,events);atomicWrite(store.path,JSON.stringify(state,null,2));
     for(const output of outputs){
       const owner=state.exports.find(owner=>owner.path===output.path);inspectTarget(output.path,owner);
-      if(!existsSync(output.path))writeFileSync(output.path,output.text,{flag:'wx',mode:0o600});
-      else atomicWrite(output.path,output.text);
+      atomicWrite(output.path,output.text,{exclusive:!existsSync(output.path)});
     }
     for(const owner of state.exports)if(outputs.some(output=>output.path===owner.path)){owner.hash=owner.pendingHash;delete owner.pendingHash;}
     state.revision++;atomicWrite(store.path,JSON.stringify(state,null,2));

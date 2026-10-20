@@ -67,6 +67,8 @@ See [study payloads and the complete workflow](skills/lecture-companion/referenc
 
 `study.json` is the source for generated notes. Capture continues to own `events.jsonl`. Commands have a separate `.study.lock`; after a hard crash verify the old study command ended before manually removing a stale lock. Repeated keyed operations with the same payload return their original result. Conflicting keys and stale explicit `expectedRevision` values fail. A receipt returned before a mode change remains the original receipt, including its original revision; use current status for an explicit revision check.
 
+Study state schema 2 fingerprints observed journal evidence independently of the committed cursor, including evidence used by standalone notes. Unsupported state versions fail explicitly; raw v0.2 captures can be initialized without altering their evidence. See [v0.3 validation and limitations](docs/validation/2026-10-20-v03.md).
+
 The default outputs are `notes.md` and `study-notes.json`. Existing manual files and edited generated files are refused; choose fresh explicit `--notes`/`--json` paths. Export reservations let an interrupted export be retried without losing saved work. Exports distinguish lecture observations, explanations, corrections, Q&A, unresolved questions and capture uncertainty. Source links identify evidence events; checking a source URL is the host agent's responsibility. Nothing here proves the learner understood a concept or reconstructs unobserved speech.
 
 ## Files and library

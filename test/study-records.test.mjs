@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,writeFileSync,readFileSync,existsSync,rmSync,mkdirSync,symlinkSync} from 'node:fs';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
+import {spawnSync} from 'node:child_process';
 import {Journal} from '../src/core.mjs';
 import {StudySession} from '../src/study-session.mjs';
 
@@ -72,6 +73,8 @@ test('frame references must be real files inside the session, including after re
   assert.throws(()=>session.next(),/frame|session|outside/i);
   rmSync(join(dir,'frame.png'));writeFileSync(join(dir,'frame.png'),'synthetic image');
   const b=session.next();rmSync(join(dir,'frame.png'));symlinkSync(join(external,'secret.png'),join(dir,'frame.png'));
+  assert.throws(()=>new StudySession(dir).next(),/frame|session|outside/i);
+  assert.throws(()=>new StudySession(dir).evidence({receipt:b.receipt,eventId:3,offset:0}),/frame|session|outside/i);
   assert.throws(()=>session.commit({key:'frames',receipt:b.receipt,items:[],dispositions:review(b)}),/frame|session|outside/i);
   assert.equal(session.status().committedCursor,0);
 });
@@ -95,12 +98,49 @@ test('export preserves manual notes, includes uncertainty/source IDs and detects
 });
 
 test('a partial export failure leaves saved work and a retry can recover generated outputs',()=>{
-  const {dir,session}=setup();session.note({key:'note',items:[{key:'q',kind:'open-question',text:'검토할 점',evidence:[2]}]});
+  const {dir,journal,session}=setup();session.note({key:'note',items:[{key:'q',kind:'open-question',text:'검토할 점',evidence:[2]}]});
   const blocked=join(dir,'blocked');writeFileSync(blocked,'parent is a file');
   assert.throws(()=>session.export({jsonPath:join(blocked,'notes.json')}));
   assert.equal(JSON.parse(readFileSync(join(dir,'study.json'),'utf8')).items.length,1);
   assert.equal(existsSync(join(dir,'notes.md')),true);
+  journal.append({type:'caption',text:'내보내기 실패 후 새 강의 내용'});
   rmSync(blocked);mkdirSync(blocked);
   const result=session.export({jsonPath:join(blocked,'notes.json')});
   assert.equal(JSON.parse(readFileSync(result.jsonPath,'utf8')).items[0].text,'검토할 점');
+});
+
+test('note-only evidence cannot be replaced while keeping the first journal row and IDs',()=>{
+  const {dir,session}=setup();session.note({key:'note',items:[{key:'l1',kind:'lecture',text:'원문을 기록함',evidence:[2]}]});
+  const path=join(dir,'events.jsonl'),original=readFileSync(path,'utf8');
+  writeFileSync(path,original.replace('Pod 네트워크','교체된 내용'));
+  assert.throws(()=>session.status(),/journal|evidence|chang/i);
+  assert.throws(()=>session.export(),/journal|evidence|chang/i);
+});
+
+test('an interrupted first export publishes no partial output and can be retried',()=>{
+  const script=`
+    import assert from 'node:assert/strict';
+    import fs from 'node:fs';
+    import {syncBuiltinESMExports} from 'node:module';
+    import {tmpdir} from 'node:os';
+    import {join} from 'node:path';
+    import {StudySession} from ${JSON.stringify(new URL('../src/study-session.mjs',import.meta.url).href)};
+    import {Journal} from ${JSON.stringify(new URL('../src/core.mjs',import.meta.url).href)};
+    const dir=fs.mkdtempSync(join(tmpdir(),'study-write-failure-')),notes=join(dir,'notes.md');
+    new Journal(dir).append({type:'caption',text:'Synthetic source'});
+    const session=new StudySession(dir);session.init();
+    const original=fs.writeFileSync;
+    fs.writeFileSync=(path,text,...args)=>{
+      if(String(path)===notes||String(path).startsWith(notes+'.')){
+        original(path,String(text).slice(0,20),...args);throw new Error('Injected write interruption');
+      }
+      return original(path,text,...args);
+    };
+    syncBuiltinESMExports();
+    try{assert.throws(()=>session.export(),/interruption/);}finally{fs.writeFileSync=original;syncBuiltinESMExports();}
+    assert.equal(fs.existsSync(notes),false,'A partially written note must not be published');
+    session.export();assert.match(fs.readFileSync(notes,'utf8'),/함께 공부한/);
+  `;
+  const result=spawnSync(process.execPath,['--input-type=module','-e',script],{encoding:'utf8'});
+  assert.equal(result.status,0,result.stderr);
 });
