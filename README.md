@@ -2,7 +2,9 @@
 
 An experimental local capture library and Codex skill for studying a subtitled lecture with an AI partner. The collector keeps repetitive browser observations out of the model context. The agent explains new evidence and writes combined notes.
 
-**v0.2:** ego lite + a visible subtitled player. No audio capture and no built-in model API. Accessible players use TextTrack `cuechange` or an explicit subtitle DOM selector with `MutationObserver`. A bounded event queue preserves short changes between reads. Inaccessible cross-origin players use a clearly labeled 500 ms snapshot fallback. PNG processing runs in an independent external Node process. Only stable visual changes are saved; the whole selected player image is retained.
+**v0.3:** durable study sessions separate captured, provided and committed evidence. Question mode preserves new evidence and pending work; catch-up resumes it in order. Grounded study records, operation retries and combined Markdown/JSON exports are managed locally. The host AI still decides when to explain and runs the commands; this library does not wake a model or listen to the conversation.
+
+Capture requires ego lite + a visible subtitled player. No audio capture and no built-in model API. Accessible players use TextTrack `cuechange` or an explicit subtitle DOM selector with `MutationObserver`. A bounded event queue preserves short changes between reads and records play/pause/ratechange. Inaccessible cross-origin players use a clearly labeled 500 ms snapshot fallback. PNG processing runs in an independent external Node process. Only stable visual changes are saved; the whole selected player image is retained.
 
 ## Run
 
@@ -42,6 +44,31 @@ The event queue is read and acknowledged after journaling, holds at most 2048 ev
 
 To install the Codex skill, link `skills/lecture-companion` into `~/.codex/skills/lecture-companion` (do not overwrite an existing skill). Keep the repository in place; the skill launcher imports its library. A new chat may be needed for automatic skill discovery. The launcher can be run immediately.
 
+## Study while the lecture continues
+
+Initialize after the collector has written its first event. Use one private output directory per lecture.
+
+```sh
+node bin/lecture.mjs study init --out /absolute/private/session
+node bin/lecture.mjs study next --out /absolute/private/session --bytes 12000
+# Save a JSON payload containing the receipt, items and per-event dispositions.
+node bin/lecture.mjs study commit --out /absolute/private/session --file /absolute/private/commit.json
+
+# A question does not stop the independent collector.
+node bin/lecture.mjs study mode --out /absolute/private/session --mode question --file /absolute/private/question.json
+node bin/lecture.mjs study note --out /absolute/private/session --file /absolute/private/answer.json
+node bin/lecture.mjs study mode --out /absolute/private/session --mode catch-up
+node bin/lecture.mjs study next --out /absolute/private/session
+node bin/lecture.mjs study status --out /absolute/private/session
+node bin/lecture.mjs study export --out /absolute/private/session
+```
+
+See [study payloads and the complete workflow](skills/lecture-companion/references/study-session.md) before writing JSON. `next` persists one stable receipt without moving the committed cursor. `commit` saves records and dispositions together before moving it. Every event must be noted or explicitly reviewed with a reason. Oversized references must be read through `study evidence` before commit. Limits apply to the serialized JSON, default 12000 and minimum 2048 UTF-8 bytes; they are not model token budgets.
+
+`study.json` is the source for generated notes. Capture continues to own `events.jsonl`. Commands have a separate `.study.lock`; after a hard crash verify the old study command ended before manually removing a stale lock. Repeated keyed operations with the same payload return their original result. Conflicting keys and stale explicit `expectedRevision` values fail. A receipt returned before a mode change remains the original receipt, including its original revision; use current status for an explicit revision check.
+
+The default outputs are `notes.md` and `study-notes.json`. Existing manual files and edited generated files are refused; choose fresh explicit `--notes`/`--json` paths. Export reservations let an interrupted export be retried without losing saved work. Exports distinguish lecture observations, explanations, corrections, Q&A, unresolved questions and capture uncertainty. Source links identify evidence events; checking a source URL is the host agent's responsibility. Nothing here proves the learner understood a concept or reconstructs unobserved speech.
+
 ## Files and library
 
 - `src/core.mjs`: caption transition deduplication and recoverable JSONL journal; bounded cursor batches.
@@ -51,6 +78,11 @@ To install the Codex skill, link `skills/lecture-companion` into `~/.codex/skill
 - `src/visual-worker*.mjs`: one external Node image process with bounded work, timeout and cleanup. JSON/base64 IPC supports different Node/V8 versions.
 - `src/player-frame.mjs`: screenshot bounds validation and cancellation before further browser commands.
 - `src/ego-capture.mjs`: independent caption/image loops; stops on source/worker failure, writes delays and local metrics.
+- `src/study-session.mjs`: follow/question/catch-up, persistent receipts, operation retries and bounded large-evidence reads.
+- `src/study-store.mjs`: separate writer lock, atomic state and capture-journal fingerprints.
+- `src/study-records.mjs`: evidence/record/disposition validation and safe local frame references.
+- `src/study-export.mjs`: derived Markdown/JSON with generated-file ownership and retryable export reservations.
+- `src/study-cli.mjs`: public study command routing.
 - `sessions/`: ignored private records, selected screenshots, notes and status. Use a new folder per lecture.
 
 ```js

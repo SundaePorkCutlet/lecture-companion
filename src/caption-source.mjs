@@ -22,7 +22,7 @@ export function installCaptionProbe({selector,captionSelector=null,capacity=2048
   if(!chosenTrack()&&!captionSelector)return {available:false,reason:'no-enabled-text-track-or-caption-selector'};
   if(captionSelector&&root.querySelectorAll(captionSelector).length!==1)return {available:false,reason:'caption-element-not-found-or-ambiguous'};
   const token=crypto.randomUUID(),queue=[],removers=[];let seq=0,dropped=0,disposed=false,frozen=false,timer,lastText,lastTime=null,failure=null;
-  const media=()=>({mediaTime:Number.isFinite(video.currentTime)?video.currentTime:null,paused:video.paused,ended:video.ended,duration:Number.isFinite(video.duration)?video.duration:null});
+  const media=()=>({mediaTime:Number.isFinite(video.currentTime)?video.currentTime:null,paused:video.paused,playbackRate:Number.isFinite(video.playbackRate)?video.playbackRate:null,ended:video.ended,duration:Number.isFinite(video.duration)?video.duration:null});
   const push=event=>{
     if(disposed||frozen)return;
     if(queue.length===capacity){queue.shift();dropped++;}
@@ -51,6 +51,7 @@ export function installCaptionProbe({selector,captionSelector=null,capacity=2048
   };
   listen(video.textTracks,'addtrack',attachTracks);listen(video.textTracks,'change',attachTracks);
   for(const event of ['timeupdate','loadedmetadata','seeked'])listen(video,event,observe);
+  for(const action of ['play','pause','ratechange'])listen(video,action,()=>push({type:'playback',action,...media()}));
   listen(video,'seeking',()=>{push({type:'seek',from:lastTime,mediaTime:media().mediaTime});lastText=undefined;observe();});
   listen(video,'ended',()=>{observe();push({type:'media-ended',mediaTime:media().mediaTime});});
   listen(video,'emptied',()=>{failure='media-source-changed';});

@@ -5,12 +5,15 @@ import {resolve,join} from 'node:path';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {spawn} from 'node:child_process';
 import {Journal} from '../src/core.mjs';
+import {runStudyCommand} from '../src/study-cli.mjs';
 
 try {
-  const {values,positionals}=parseArgs({allowPositionals:true,options:Object.fromEntries(['out','space','page','duration','after','bytes','selector','title','caption-mode','caption-selector'].map(k=>[k,{type:'string'}]))});
+  const {values,positionals}=parseArgs({allowPositionals:true,options:Object.fromEntries(['out','space','page','duration','after','bytes','selector','title','caption-mode','caption-selector','mode','file','receipt','event','offset','notes','json'].map(k=>[k,{type:'string'}]))});
   const command=positionals[0]??'help',out=resolve(values.out??'sessions/demo');
   if(command==='help'){
-    console.log(`Lecture Companion 0.2\nCommands: capture, batch, status, stop, export, demo\nRequired for capture: --space ID --page p1 --out ABSOLUTE_DIR\nOptional: --duration 1800 --selector 'iframe[src*=kollus.com]'\nCaptions: --caption-mode auto|event|snapshot --caption-selector CSS\nAuto prefers TextTrack/DOM events; inaccessible iframe uses explicit snapshot fallback.\nBatch: --after 0 --bytes 12000 (UTF-8 bytes, not token count)\nCapture observes only; start/pause/speed remain in the player.\nStop: create STOP via the stop command; remove STOP before resuming.`);
+    console.log(`Lecture Companion 0.3\nCommands: capture, batch, status, stop, export, demo, study\nRequired for capture: --space ID --page p1 --out ABSOLUTE_DIR\nOptional: --duration 1800 --selector 'iframe[src*=kollus.com]'\nCaptions: --caption-mode auto|event|snapshot --caption-selector CSS\nAuto prefers TextTrack/DOM events; inaccessible iframe uses explicit snapshot fallback.\nBatch: --after 0 --bytes 12000 (UTF-8 bytes, not token count)\nStudy: init|mode|next|evidence|commit|note|status|export --out SESSION\nStudy mode: --mode follow|question|catch-up; question requires --file JSON\nStudy commit/note: --file JSON. Evidence: --receipt ID --event N --offset N\nStudy next/evidence: --bytes 12000 (minimum 2048). Export: --notes PATH --json PATH\nCapture observes only; start/pause/speed remain in the player.\nStop: create STOP via the stop command; remove STOP before resuming.`);
+  }else if(command==='study'){
+    process.stdout.write(JSON.stringify(runStudyCommand(positionals[1],values,out)));
   }else if(command==='capture'){
     if(!values.out)throw new Error('capture requires an explicit --out directory');
     const captionMode=values['caption-mode']??'auto';
