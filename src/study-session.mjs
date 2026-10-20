@@ -1,5 +1,7 @@
 import {randomUUID} from 'node:crypto';
 import {StudyStore,checkBudget,bytes,replayOperation,journalHash} from './study-store.mjs';
+import {validateItems,validateDispositions,safeFrame,mergeReadRange} from './study-records.mjs';
+import {exportStudy} from './study-export.mjs';
 
 export class StudySession{
   constructor(dir){this.store=new StudyStore(dir);}
@@ -21,9 +23,9 @@ export class StudySession{
       const op=key?replayOperation(state,key,payload):null;
       if(op?.previous)return {replay:true,value:op.previous.result};
       if(mode==='question'){
-        if(!key||question?.kind!=='question'||!question.key||!question.text?.trim())throw new Error('Question mode requires a keyed question');
-        if(state.items.some(item=>item.key===question.key))throw new Error('Duplicate study item key');
-        state.items.push({...question,evidence:question.evidence??[],capturedThrough:events.at(-1).id,
+        if(!key||question?.kind!=='question')throw new Error('Question mode requires a keyed question');
+        const [item]=validateItems([question],state,events,this.store.dir);
+        state.items.push({...item,capturedThrough:events.at(-1).id,
           committedThrough:state.committedCursor,createdAt:new Date().toISOString()});
       }
       state.mode=mode;const value={mode,revision:state.revision+1};
@@ -46,6 +48,7 @@ export class StudySession{
       if(!tail.length)return {replay:true,value:{...packet,revision:state.revision,caughtUpThrough:packet.capturedThrough}};
       packet.receipt=randomUUID();
       for(const event of tail.slice(0,100)){
+        if(event.type==='frame')safeFrame(this.store.dir,event.file);
         packet.events.push(event);packet.nextCursor=event.id;packet.hasMore=event.id<packet.capturedThrough;
         if(bytes(packet)>maxBytes){
           packet.events.pop();
@@ -64,17 +67,46 @@ export class StudySession{
       if(op.previous)return {replay:true,value:op.previous.result};
       const packet=state.pending?.packet;
       if(!packet||packet.receipt!==payload.receipt)throw new Error('Unknown study receipt');
-      if(!Array.isArray(payload.items)||payload.items.length)throw new Error('Annotated commits are not implemented yet');
-      const dispositions=payload.dispositions??[];
-      if(dispositions.length!==packet.events.length||new Set(dispositions.map(d=>d.eventId)).size!==packet.events.length)throw new Error('Every offered event needs a disposition');
-      for(const event of packet.events){
-        if(event.omitted)throw new Error('Read oversized evidence before committing');
-        const d=dispositions.find(d=>d.eventId===event.id);
-        if(d?.action!=='reviewed'||!d.reason?.trim())throw new Error('A reviewed reason is required');
-      }
+      if(state.mode==='question')throw new Error('Resume follow or catch-up before committing evidence');
+      for(const event of packet.events)if(event.type==='frame')safeFrame(this.store.dir,events[event.id-1].file);
+      const items=validateItems(payload.items,state,events,this.store.dir);
+      validateDispositions(payload.dispositions,packet,[...state.items,...items],state.pending);
+      state.items.push(...items);state.commits??=[];
+      state.commits.push({receipt:packet.receipt,through:packet.nextCursor,dispositions:payload.dispositions,itemKeys:items.map(item=>item.key),committedAt:new Date().toISOString()});
       state.committedCursor=packet.nextCursor;state.journal.committedHash=journalHash(events,state.committedCursor);state.pending=null;
       const value={committedCursor:state.committedCursor,revision:state.revision+1};
       state.operations.push({key:payload.key,hash:op.hash,result:value});return {value};
     },{expectedRevision:payload.expectedRevision});
   }
+  note(payload){
+    return this.store.update((state,events)=>{
+      const op=replayOperation(state,payload.key,{operation:'note',...payload});
+      if(op.previous)return {replay:true,value:op.previous.result};
+      const items=validateItems(payload.items,state,events,this.store.dir);
+      for(const item of items)if(item.kind==='question'){item.capturedThrough=events.at(-1).id;item.committedThrough=state.committedCursor;}
+      state.items.push(...items);
+      const value={itemKeys:items.map(item=>item.key),revision:state.revision+1};
+      state.operations.push({key:payload.key,hash:op.hash,result:value});return {value};
+    },{expectedRevision:payload.expectedRevision});
+  }
+  evidence({receipt,eventId,offset=0,maxBytes=12000}){
+    checkBudget(maxBytes);
+    return this.store.update((state,events)=>{
+      const pending=state.pending,packet=pending?.packet;
+      if(!packet||packet.receipt!==receipt||!packet.events.some(event=>event.id===eventId))throw new Error('Evidence is not in this receipt');
+      const chars=Array.from(JSON.stringify(events[eventId-1]));
+      if(!Number.isInteger(offset)||offset<0||offset>=chars.length)throw new Error('Invalid evidence character offset');
+      const response={sessionId:state.sessionId,receipt,eventId,revision:state.revision+1,offset,nextOffset:offset,totalCharacters:chars.length,text:'',complete:false};
+      let low=offset,high=chars.length;
+      while(low<high){
+        const end=Math.ceil((low+high)/2),test={...response,text:chars.slice(offset,end).join(''),nextOffset:end,complete:end===chars.length};
+        if(bytes(test)<=maxBytes)low=end;else high=end-1;
+      }
+      if(low===offset)throw new Error('Evidence metadata exceeds byte limit');
+      response.text=chars.slice(offset,low).join('');response.nextOffset=low;response.complete=low===chars.length;
+      pending.readRanges[eventId]=mergeReadRange(pending.readRanges[eventId],offset,low,chars.length);
+      return {value:response};
+    });
+  }
+  export(options){return exportStudy(this.store,options);}
 }
