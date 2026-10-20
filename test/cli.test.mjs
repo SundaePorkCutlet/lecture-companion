@@ -19,4 +19,6 @@ test('demo, bounded batches, stop and export work through the public CLI',()=>{
   assert.match(doc,/DEMO/);assert.match(doc,/mediaTime/);
   assert.equal(run('stop','--out',out).status,0);
   assert.notEqual(run('batch','--out',out,'--after','-1').status,0);
+  assert.match(run('capture','--space','7','--page','p1','--duration','0').stderr,/--out/);
+  assert.match(run('capture','--out',out,'--space','7','--page','p1','--caption-mode','invalid','--duration','0').stderr,/caption.mode must/);
 });

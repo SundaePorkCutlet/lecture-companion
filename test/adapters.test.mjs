@@ -34,10 +34,11 @@ test('visual gate ignores cursor noise, requires stable visual change and suppre
   assert.equal(gate.observe(slide),false);
 });
 
-test('cropping excludes subtitles and controls from comparison and stored image',async()=>{
+test('comparison ignores subtitles while saved player image retains bottom content',async()=>{
   const image=new PNG({width:100,height:100});image.data.fill(255);image.data.fill(0,100*80*4);
   const input=PNG.sync.write(image);
   const result=await visual.prepareFrame(input);
-  assert.equal(PNG.sync.read(result.png).height,80);
+  assert.equal(PNG.sync.read(result.png).height,100);
+  assert.equal(PNG.sync.read(result.png).data[100*90*4],0);
   assert.ok(result.pixels.every(v=>v===255));
 });

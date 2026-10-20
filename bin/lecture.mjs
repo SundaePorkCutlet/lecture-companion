@@ -7,16 +7,19 @@ import {spawn} from 'node:child_process';
 import {Journal} from '../src/core.mjs';
 
 try {
-  const {values,positionals}=parseArgs({allowPositionals:true,options:Object.fromEntries(['out','space','page','duration','after','bytes','selector','title'].map(k=>[k,{type:'string'}]))});
+  const {values,positionals}=parseArgs({allowPositionals:true,options:Object.fromEntries(['out','space','page','duration','after','bytes','selector','title','caption-mode','caption-selector'].map(k=>[k,{type:'string'}]))});
   const command=positionals[0]??'help',out=resolve(values.out??'sessions/demo');
   if(command==='help'){
-    console.log(`Lecture Companion 0.1\nCommands: capture, batch, status, stop, export, demo\nRequired for capture: --space ID --page p1 --out ABSOLUTE_DIR\nOptional: --duration 1800 --selector 'iframe[src*=kollus.com]'\nBatch: --after 0 --bytes 12000 (UTF-8 bytes, not token count)\nCapture observes only; start/pause/speed remain in the player.\nStop: create STOP via the stop command; remove STOP before resuming.`);
+    console.log(`Lecture Companion 0.2\nCommands: capture, batch, status, stop, export, demo\nRequired for capture: --space ID --page p1 --out ABSOLUTE_DIR\nOptional: --duration 1800 --selector 'iframe[src*=kollus.com]'\nCaptions: --caption-mode auto|event|snapshot --caption-selector CSS\nAuto prefers TextTrack/DOM events; inaccessible iframe uses explicit snapshot fallback.\nBatch: --after 0 --bytes 12000 (UTF-8 bytes, not token count)\nCapture observes only; start/pause/speed remain in the player.\nStop: create STOP via the stop command; remove STOP before resuming.`);
   }else if(command==='capture'){
+    if(!values.out)throw new Error('capture requires an explicit --out directory');
+    const captionMode=values['caption-mode']??'auto';
+    if(!['auto','event','snapshot'].includes(captionMode))throw new Error('caption-mode must be auto, event, or snapshot');
     if(!/^\d+$/.test(values.space??'')||!/^p\d+$/.test(values.page??''))throw new Error('Use an authorized ego task space ID and existing page label.');
     const durationSec=Number(values.duration??1800);if(!Number.isFinite(durationSec)||durationSec<=0)throw new Error('Invalid duration');
     mkdirSync(out,{recursive:true,mode:0o700});if(existsSync(join(out,'STOP')))throw new Error('STOP exists; inspect and remove it before resuming.');
     const module=pathToFileURL(fileURLToPath(new URL('../src/ego-capture.mjs',import.meta.url))).href;
-    const source=`const {runCapture}=await import(${JSON.stringify(module)});\nconst task=await taskSpace(${Number(values.space)});\nconst page=task.page(${JSON.stringify(values.page)});\nawait runCapture({page,${JSON.stringify({out,durationSec,selector:values.selector??'iframe[src*="kollus.com"]'}).slice(1,-1)},onNotice: x=>console.log(JSON.stringify(x))});`;
+    const source=`const {runCapture}=await import(${JSON.stringify(module)});\nconst task=await taskSpace(${Number(values.space)});\nconst page=task.page(${JSON.stringify(values.page)});\nawait runCapture({page,${JSON.stringify({out,durationSec,selector:values.selector??'iframe[src*="kollus.com"]',captionMode,captionSelector:values['caption-selector']??null,imageNode:process.execPath}).slice(1,-1)},onNotice: x=>console.log(JSON.stringify(x))});`;
     const child=spawn('ego-browser',['nodejs'],{stdio:['pipe','inherit','inherit']});
     child.stdin.end(source);child.on('error',()=>{console.error('ego-browser unavailable');process.exitCode=1;});
     child.on('exit',code=>{process.exitCode=code??1;});

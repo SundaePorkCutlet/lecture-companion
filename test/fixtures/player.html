@@ -1,0 +1,18 @@
+<!doctype html><html lang="ko"><meta charset="utf-8"><title>Lecture Companion synthetic player</title>
+<style>body{margin:16px;font:18px system-ui}#player{width:640px;height:430px;background:#e8eef5;position:relative}video{width:640px;height:340px;background:#213347}#caption{padding:12px;background:white}#bottom{position:absolute;bottom:0;background:#f7c948;width:100%;height:24px}canvas{display:none}</style>
+<section id="player" role="region" aria-label="video player"><video id="video" muted controls></video><div id="caption">initial</div><div id="bottom">BOTTOM CONTENT MUST REMAIN</div></section><canvas id="canvas" width="160" height="90"></canvas>
+<script>
+window.captionSeries=async function(values,interval=25){for(const value of values){document.querySelector('#caption').textContent=value;await new Promise(r=>setTimeout(r,interval));}};
+window.prepareVideo=async function(){
+ const canvas=document.querySelector('canvas'),ctx=canvas.getContext('2d'),stream=canvas.captureStream(20),chunks=[];
+ const recorder=new MediaRecorder(stream,{mimeType:'video/webm'});recorder.ondataavailable=e=>chunks.push(e.data);
+ const done=new Promise(r=>recorder.onstop=r);recorder.start();
+ const timer=setInterval(()=>{ctx.fillStyle=`hsl(${performance.now()%360} 70% 40%)`;ctx.fillRect(0,0,160,90);},40);
+ await new Promise(r=>setTimeout(r,1300));recorder.stop();await done;clearInterval(timer);stream.getTracks().forEach(t=>t.stop());
+ const video=document.querySelector('video');video.src=URL.createObjectURL(new Blob(chunks,{type:'video/webm'}));
+ await new Promise((resolve,reject)=>{video.onloadeddata=resolve;video.onerror=reject;});
+ const track=video.addTextTrack('captions','Fixture','ko');track.mode='showing';
+ for(const [a,b,text]of [[0.1,0.24,'cue one'],[0.30,0.44,'cue two'],[0.5,0.64,'cue three']])track.addCue(new VTTCue(a,b,text));
+ return {duration:video.duration,tracks:video.textTracks.length};
+};
+</script></html>
