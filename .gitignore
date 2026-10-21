@@ -1,4 +1,5 @@
 node_modules/
+dist/
 sessions/
 .superpowers/
 .DS_Store

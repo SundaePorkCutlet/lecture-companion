@@ -1,6 +1,6 @@
 import {existsSync,mkdirSync,readFileSync,writeFileSync,openSync,readSync,closeSync} from 'node:fs';
-import {join,resolve} from 'node:path';
-import {fileURLToPath} from 'node:url';
+import {join,resolve,isAbsolute} from 'node:path';
+import {homedir} from 'node:os';
 import {randomUUID} from 'node:crypto';
 import {listAsideTabs,connectAsidePage} from './aside-browser.mjs';
 import {runtimeDoctor,hostRuntime} from './host-runtime.mjs';
@@ -12,6 +12,13 @@ import {safeFrame} from './study-records.mjs';
 const label=value=>String(value??'').replace(/[\u0000-\u001f\u007f-\u009f]/g,' ').replace(/\s+/g,' ').trim().slice(0,120);
 const site=url=>{try{const parsed=new URL(url);return ['http:','https:'].includes(parsed.protocol)?parsed.origin:parsed.protocol;}catch{return 'unknown';}};
 const quote=s=>`'${String(s).replace(/'/g,"'\\''")}'`;
+function sessionDirectory(){
+  const configured=process.env.LECTURE_COMPANION_DATA_DIR||undefined;
+  if(configured&&!isAbsolute(configured))throw new Error('LECTURE_COMPANION_DATA_DIR must be an absolute data directory');
+  const xdg=process.env.XDG_DATA_HOME;
+  const data=configured??join(xdg&&isAbsolute(xdg)?xdg:join(homedir(),'.local/share'),'lecture-companion');
+  return join(data,'sessions',`${new Date().toISOString().replace(/[:.]/g,'-')}-${randomUUID().slice(0,8)}`);
+}
 
 // Runs only in the selected tab. Return geometry and selectors, never frame URLs.
 export function discoverPlayers({selector=null,captionSelector=null}={}){
@@ -70,7 +77,7 @@ export async function setupLecture(options={}){
   const browser=options.browser??'aside';
   if(browser!=='aside')return {step:'needs-browser',ready:false,actions:['For ego, use the existing authorized task-space flow in the lecture-companion skill. The first-run assistant currently supports Aside.']};
   let doctor;
-  try{doctor=await runtimeDoctor();}catch{return {step:'needs-runtime',ready:false,actions:['Run the launcher from the complete repository. Check the existing Aside managed runtime or set LECTURE_NODE to a supported host Node.']};}
+  try{doctor=await runtimeDoctor();}catch{return {step:'needs-runtime',ready:false,actions:['Run the launcher from the complete installed skill. Check the existing Aside managed runtime or set LECTURE_NODE to a supported host Node.']};}
   const connection={...(options.account?{account:options.account}:{}),...(options.profile?{profile:options.profile}:{})};
   let tabs;
   try{tabs=await listAsideTabs(connection);}catch{return {step:'needs-browser',ready:false,runtime:doctor.runtime,actions:[
@@ -103,7 +110,7 @@ export async function startLecture(options={},onNotice=()=>{}){
   if(!['codex','claude-code'].includes(host))throw new Error('host must be codex or claude-code');
   if(!Number.isFinite(durationSec)||durationSec<=0||!['auto','event','snapshot'].includes(captionMode))throw new Error('Invalid duration or caption mode');
   if(!options.tab)throw new Error('Choose the lecture title with setup before start; --tab is required');
-  const out=options.out?resolve(options.out):fileURLToPath(new URL(`../sessions/${new Date().toISOString().replace(/[:.]/g,'-')}-${randomUUID().slice(0,8)}/`,import.meta.url));
+  const out=options.out?resolve(options.out):sessionDirectory();
   if(existsSync(out))throw new Error('Session directory already exists. Use check/stop for that session or choose a fresh --out.');
   const plan=await setupLecture(options);
   if(plan.step!=='ready-to-start')throw new Error(`${plan.step}: ${plan.actions.join(' ')}`);

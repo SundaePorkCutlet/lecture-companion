@@ -15,7 +15,7 @@ const server=createServer((req,res)=>{res.setHeader('Content-Type','text/html; c
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 const account=process.env.LECTURE_ASIDE_ACCOUNT,profile=process.env.LECTURE_ASIDE_PROFILE;
 const client=new AsideClient({account,profile}),targets=[];
-const launcher=fileURLToPath(new URL('../bin/lecture',import.meta.url));
+const launcher=process.env.LECTURE_TEST_LAUNCHER?resolve(process.env.LECTURE_TEST_LAUNCHER):fileURLToPath(new URL('../bin/lecture',import.meta.url));
 const env={...process.env,PATH:'/usr/bin:/bin'};
 const run=(...args)=>{const p=spawnSync('/bin/sh',[launcher,...args],{env,encoding:'utf8',timeout:20000});assert.equal(p.status,0,p.stderr);return args[0]==='stop'?p.stdout:JSON.parse(p.stdout);};
 const selectArgs=['--browser','aside',...(account?['--account',account]:[]),...(profile?['--profile',profile]:[])];

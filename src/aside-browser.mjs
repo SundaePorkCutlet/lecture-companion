@@ -61,7 +61,7 @@ export class AsideClient{
     });
   }
   async start(){
-    await this.request('initialize',{protocolVersion:'2024-11-05',capabilities:{},clientInfo:{name:'lecture-companion',version:'0.8.0'}});
+    await this.request('initialize',{protocolVersion:'2024-11-05',capabilities:{},clientInfo:{name:'lecture-companion',version:'0.9.0'}});
     this.child.stdin.write(JSON.stringify({jsonrpc:'2.0',method:'notifications/initialized'})+'\n');
     const listed=await this.request('tools/list',{});
     if(!listed.tools?.some(t=>t.name==='repl'&&t.inputSchema?.properties?.code))throw this.fail('Aside MCP REPL tool is unavailable');

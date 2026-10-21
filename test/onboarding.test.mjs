@@ -1,7 +1,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {spawn,spawnSync} from 'node:child_process';
-import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,readlinkSync,existsSync,symlinkSync} from 'node:fs';
+import {mkdtempSync,mkdirSync,writeFileSync,readFileSync,lstatSync,existsSync,symlinkSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join,resolve} from 'node:path';
 import {fileURLToPath} from 'node:url';
@@ -20,13 +20,13 @@ function environment(){
   return {root,home,env,run};
 }
 
-test('one installer links both hosts without Node or npm and is safe to repeat',()=>{
+test('one installer copies both hosts without Node or npm and is safe to repeat',()=>{
   const {home,env}=environment();
   const run=()=>spawnSync('/bin/sh',['install.sh','--host','both'],{env:{...env,ASIDE_HOME:join(home,'no-runtime')},encoding:'utf8'});
   const first=run();assert.equal(first.status,0,first.stderr);
   for(const host of ['.codex','.claude']){
     const installed=join(home,host,'skills/lecture-companion');
-    assert.equal(readlinkSync(installed),resolve('skills/lecture-companion'));
+    assert.equal(lstatSync(installed).isDirectory(),true);assert.equal(lstatSync(installed).isSymbolicLink(),false);
     const help=spawnSync('/bin/sh',[join(installed,'scripts/lecture'),'help'],{env,encoding:'utf8'});
     assert.equal(help.status,0,help.stderr);
   }

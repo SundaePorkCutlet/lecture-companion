@@ -1,6 +1,6 @@
 # App-provided execution
 
-On macOS/Linux run `/bin/sh ABS_SKILL/scripts/lecture doctor`. The same launcher handles capture, study, context, Q&A and export. It does not install software, download binaries or run npm. The complete repository must include `bin/`, `src/` and `vendor/`; a skill-only copy without those files is not a working distribution.
+On macOS/Linux run `/bin/sh ABS_SKILL/scripts/lecture doctor`. The same launcher handles capture, study, context, Q&A and export. It does not install software, download binaries or run npm. The installed skill includes its own `scripts/runtime/bin/`, `src/`, vendored PNG library, package metadata and licenses. Copying/installing this whole skill folder is sufficient; it never imports a parent repository. A Node executable is still borrowed from the host/browser, rather than shipping platform-specific Node binaries.
 
 Selection order:
 
@@ -22,3 +22,5 @@ For direct library calls inside ego, choose one verified path:
 Aside's managed runtime is distinct from `aside repl`: the current official REPL guide explicitly forbids imports and require. Do not execute `aside runtime ...` speculatively: the inspected CLI does not list a runtime subcommand and unknown words can be treated as an agent prompt. This launcher only checks an already provisioned managed executable. If it is absent or incompatible, use the next available provider; if none works, report that the app's runtime is unavailable. Do not repair, install, log in, send agent tasks or change permissions as a side effect of detection. Background: [official runtime feature history](https://docs.aside.com/changelog/components), [CLI/REPL documentation](https://docs.aside.com/help/developers).
 
 The existing `.mjs` entry points remain compatible with an explicit host Node. Windows requires that explicit host-runtime invocation; no automatic PowerShell bootstrap is included. A browser's page JavaScript engine alone is not a general Node runtime. For Aside browser capture use the official CLI/MCP adapter described in [aside.md](aside.md); it runs outside the sandboxed REPL and keeps all imports/image processing in the managed Node. Chrome capture and native Aside question-chat creation are not included.
+
+Guided `start` writes sessions outside this skill: `$LECTURE_COMPANION_DATA_DIR/sessions` when explicitly configured with an absolute path, else `$XDG_DATA_HOME/lecture-companion/sessions` (absolute XDG root) or `~/.local/share/lecture-companion/sessions`. `--out` overrides the default. Keep this private data directory when updating/removing the skill. Existing sessions at explicit older paths remain usable through `--out`.
