@@ -55,10 +55,10 @@ export async function runCapture({page,out,durationSec=1800,pollMs=500,frameMs=2
     processor=new VisualWorker({nodeExecutable:imageNode,runtime:imageRuntime});status();onNotice({type:'started',out,adapter:source.kind,fallbackReason:source.fallbackReason});
     visualTask=(async()=>{
       while(!abort.signal.aborted){
-        const begin=Date.now(),png=await capturePlayerFrame(page,selector,abort.signal);
-        if(!png||abort.signal.aborted)return;
+        const begin=Date.now(),frame=await capturePlayerFrame(page,selector,abort.signal);
+        if(!frame||abort.signal.aborted)return;
         metrics.maxScreenshotMs=Math.max(metrics.maxScreenshotMs,Date.now()-begin);metrics.frameSamples++;
-        const result=await processor.process(png);
+        const result=await processor.process(frame);
         metrics.maxImageProcessingMs=Math.max(metrics.maxImageProcessingMs,result.processingMs);
         if(result.selected&&!abort.signal.aborted){
           const file=`frame-${String(journal.lastId+1).padStart(6,'0')}.png`;

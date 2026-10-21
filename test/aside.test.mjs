@@ -9,6 +9,7 @@ import {PNG} from '../vendor/pngjs/lib/png.js';
 import {AsideClient,connectAsidePage,listAsideTabs,findAsideCommand} from '../src/aside-browser.mjs';
 import {capturePlayerFrame} from '../src/player-frame.mjs';
 import {createCaptionSource} from '../src/caption-source.mjs';
+import {VisualWorker} from '../src/visual-worker.mjs';
 
 const quote=s=>`'${s.replace(/'/g,"'\\''")}'`;
 function command(){
@@ -38,12 +39,14 @@ test('Aside snapshot fallback scopes to the selected player and excludes control
 
 test('Aside frame capture uses PNG screenshot without CDP, while transport failure closes pending work without secrets',async()=>{
   const session=await connectAsidePage({command:command(),targetId:'lecture-1'});
+  const worker=new VisualWorker();
   try{
-    const png=await capturePlayerFrame(session.page,'#player');
-    assert.equal(PNG.sync.read(png).width,120);
+    const frame=await worker.process(await capturePlayerFrame(session.page,'#player'));
+    const img=PNG.sync.read(frame.png);assert.equal(img.width,120);assert.equal(img.height,100);
+    assert.deepEqual([...img.data.subarray(0,4)],[0,180,0,255]);
     await assert.rejects(()=>session.page.evaluate(()=>{throw new Error('lost');}),error=>!error.message.includes('PRIVATE')&&/Aside/.test(error.message));
     await assert.rejects(()=>session.page.evaluate(()=>true),/Aside/);
-  }finally{await session.close();}
+  }finally{await worker.close();await session.close();}
 });
 
 test('Aside discovery honors explicit CLI and finds an app-managed CLI outside PATH',()=>{
@@ -53,6 +56,16 @@ test('Aside discovery honors explicit CLI and finds an app-managed CLI outside P
   const home=mkdtempSync(join(tmpdir(),'aside-home-'));
   const installed=join(home,'.aside/cli/Aside CLI.app/Contents/MacOS/aside');mkdirSync(join(installed,'..'),{recursive:true});writeFileSync(installed,'#!/bin/sh\nexit 0\n',{mode:0o700});
   assert.equal(findAsideCommand({HOME:home,PATH:'/nonexistent'}),installed);
+});
+
+test('Aside refuses a frame when viewport resize or scrolling changes geometry during screenshot',async()=>{
+  for(const change of ['resize','scroll']){
+    const session=await connectAsidePage({command:command(),targetId:'lecture-1'});
+    try{
+      await session.page.evaluate(change=>{globalThis.fixtureScreenshotChange=change;return true;},change);
+      await assert.rejects(()=>capturePlayerFrame(session.page,'#player'),/geometry changed/);
+    }finally{await session.close();}
+  }
 });
 
 test('Aside serializes persistent REPL calls so a frame cannot collide with subtitle reads',async()=>{

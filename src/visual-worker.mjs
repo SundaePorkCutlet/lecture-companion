@@ -16,13 +16,13 @@ export class VisualWorker {
     this.worker.on('exit',()=>{if(!this.closed)this.fail(new Error('Image worker exited'));});
   }
   fail(error){this.failure=error;if(this.pending){clearTimeout(this.pending.timer);this.pending.reject(error);this.pending=null;}}
-  async process(png){
+  async process(frame){
     if(this.closed||this.failure)throw this.failure??new Error('Image worker closed');
     if(this.pending)throw new Error('Image worker busy');
     return new Promise((resolve,reject)=>{
       const timer=setTimeout(()=>{this.fail(new Error('Image worker timed out'));void this.close();},this.timeoutMs);
       this.pending={resolve,reject,timer};
-      try{this.worker.send({png:Buffer.from(png).toString('base64')},error=>{if(error)this.fail(new Error('Image worker send failed'));});}catch{this.fail(new Error('Image worker send failed'));}
+      try{this.worker.send({png:Buffer.from(frame.png??frame).toString('base64'),...(frame.crop?{crop:frame.crop}:{})},error=>{if(error)this.fail(new Error('Image worker send failed'));});}catch{this.fail(new Error('Image worker send failed'));}
     });
   }
   async close(){

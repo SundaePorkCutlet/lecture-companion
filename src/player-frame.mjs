@@ -1,5 +1,5 @@
-export async function capturePlayerFrame(page,selector,signal){
-  const clip=await page.evaluate(selector=>{
+// Self-contained so browser adapters can recheck the same geometry around a shot.
+export function measurePlayer(selector){
     const nodes=[...document.querySelectorAll(selector)];
     if(nodes.length!==1)throw new Error('Choose exactly one player element');
     if(nodes[0].tagName==='IFRAME'){
@@ -10,10 +10,16 @@ export async function capturePlayerFrame(page,selector,signal){
     }
     const r=nodes[0].getBoundingClientRect();
     if(r.x<0||r.y<0||r.width<50||r.height<50||r.right>innerWidth||r.bottom>innerHeight)throw new Error('Player must be fully visible');
-    return {x:r.x,y:r.y,width:r.width,height:r.height,scale:1};
-  },selector);
+    return {x:r.x,y:r.y,width:r.width,height:r.height,scale:1,viewportWidth:innerWidth,viewportHeight:innerHeight,pixelRatio:devicePixelRatio};
+}
+
+export async function capturePlayerFrame(page,selector,signal){
+  const bounds=await page.evaluate(measurePlayer,selector);
   if(signal?.aborted)return null;
-  if(page.screenshot)return page.screenshot(clip);
+  const {viewportWidth,viewportHeight,pixelRatio,...clip}=bounds;
+  // Some adapters return an uncropped PNG plus crop metadata. Only the image
+  // worker's result is publishable; never persist this intermediate packet.
+  if(page.screenshot)return page.screenshot(clip,{width:viewportWidth,height:viewportHeight,pixelRatio},selector);
   const shot=await page.cdp('Page.captureScreenshot',{format:'png',clip,captureBeyondViewport:false},{timeout:10000});
   return Buffer.from(shot.data,'base64');
 }

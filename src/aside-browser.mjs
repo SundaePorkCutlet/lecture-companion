@@ -3,6 +3,7 @@ import {accessSync,constants} from 'node:fs';
 import {join,delimiter,isAbsolute} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {parseAsideSnapshot} from './snapshot.mjs';
+import {measurePlayer} from './player-frame.mjs';
 
 const executable=path=>{try{accessSync(path,constants.X_OK);return true;}catch{return false;}};
 export function findAsideCommand(env=process.env){
@@ -60,7 +61,7 @@ export class AsideClient{
     });
   }
   async start(){
-    await this.request('initialize',{protocolVersion:'2024-11-05',capabilities:{},clientInfo:{name:'lecture-companion',version:'0.7.0'}});
+    await this.request('initialize',{protocolVersion:'2024-11-05',capabilities:{},clientInfo:{name:'lecture-companion',version:'0.7.1'}});
     this.child.stdin.write(JSON.stringify({jsonrpc:'2.0',method:'notifications/initialized'})+'\n');
     const listed=await this.request('tools/list',{});
     if(!listed.tools?.some(t=>t.name==='repl'&&t.inputSchema?.properties?.code))throw this.fail('Aside MCP REPL tool is unavailable');
@@ -110,10 +111,21 @@ export async function connectAsidePage({targetId,...options}){
         const snapshot=await client.json(`snapshot(${ref},{selector:${JSON.stringify(selector)}})`);
         return {state:parseAsideSnapshot(snapshot.tree),rawBytes:Buffer.byteLength(snapshot.tree)};
       },
-      async screenshot(clip){
-        const data=await client.json(`(async()=>{const shot=await ${ref}.screenshot({type:'png',timeout:10000,clip:${JSON.stringify(clip)}});return Buffer.from(shot).toString('base64');})()`);
+      async screenshot(clip,viewport,selector){
+        // Native Aside 1.26.1021 ignored screenshot clip origins. Capture the
+        // viewport and crop in the existing external image worker instead.
+        const expected={...clip,viewportWidth:viewport.width,viewportHeight:viewport.height,pixelRatio:viewport.pixelRatio};
+        const data=await client.json(`(async()=>{
+          const expected=${JSON.stringify(expected)};
+          const unchanged=async()=>{const current=await ${ref}.evaluate((${measurePlayer.toString()}),${JSON.stringify(selector)});return Object.keys(expected).every(key=>current[key]===expected[key]);};
+          if(!await unchanged())return null;
+          const shot=await ${ref}.screenshot({type:'png',timeout:10000});
+          if(!await unchanged())return null;
+          return Buffer.from(shot).toString('base64');
+        })()`);
+        if(data===null)throw new Error('Aside player geometry changed during screenshot; inspect the player before restarting');
         if(typeof data!=='string'||!/^[A-Za-z0-9+/]+={0,2}$/.test(data))throw client.fail('Aside returned an invalid screenshot');
-        return Buffer.from(data,'base64');
+        return {png:Buffer.from(data,'base64'),crop:{x:clip.x,y:clip.y,width:clip.width,height:clip.height,viewportWidth:viewport.width,viewportHeight:viewport.height,pixelRatio:viewport.pixelRatio}};
       }
     };
     return {page,client,close:()=>client.close()};

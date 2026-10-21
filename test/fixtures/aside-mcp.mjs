@@ -2,16 +2,23 @@
 import {createInterface} from 'node:readline';
 import {createContext,runInContext} from 'node:vm';
 import {PNG} from '../../vendor/pngjs/lib/png.js';
-const image=new PNG({width:120,height:100});image.data.fill(255);
+const image=new PNG({width:800,height:600});
+for(let y=0;y<600;y++)for(let x=0;x<800;x++){const i=(y*800+x)*4;image.data[i]=210;image.data[i+3]=255;if(x>=16&&x<136&&y>=24&&y<124){image.data[i]=0;image.data[i+1]=180;}}
 const png=PNG.sync.write(image),attached=new Map();
 const page={evaluate:async(fn,arg)=>fn(arg),screenshot:async({clip})=>{
-  if(clip.width!==120||clip.height!==100)throw new Error('wrong clip');return png;
+  if(context.fixtureScreenshotChange==='resize'){context.innerWidth=1600;context.innerHeight=1200;}
+  if(context.fixtureScreenshotChange==='scroll')context.fixtureOffset=20;
+  if(!clip)return png;
+  // Native Aside 1.26.1021 respected clip size but ignored its origin.
+  const cropped=new PNG({width:clip.width,height:clip.height});
+  for(let y=0;y<clip.height;y++)image.data.copy(cropped.data,y*clip.width*4,y*800*4,(y*800+clip.width)*4);
+  return PNG.sync.write(cropped);
 }};
 const tabs=[{targetId:'lecture-1',title:'Synthetic lecture',url:'http://localhost/lecture',active:false},{targetId:'private-2',title:'Other tab',url:'http://localhost/private',active:true}];
 let lines=[],busy=false;
 const context=createContext({Buffer,setTimeout,console:{log:s=>lines.push(String(s))},
-  innerWidth:800,innerHeight:600,
-  document:{querySelectorAll:selector=>selector==='#player'?[{tagName:'SECTION',getBoundingClientRect:()=>({x:0,y:0,width:120,height:100,right:120,bottom:100})}]:[]},
+  innerWidth:800,innerHeight:600,devicePixelRatio:1,
+  document:{querySelectorAll:selector=>selector==='#player'?[{tagName:'SECTION',getBoundingClientRect:()=>({x:16,y:24+(context.fixtureOffset??0),width:120,height:100,right:136,bottom:124+(context.fixtureOffset??0)})}]:[]},
   listBrowserTabs:async()=>tabs,
   attachBrowserTab:async id=>{if(id!=='lecture-1')throw new Error('wrong target');attached.set(id,page);return page;},
   getTabByTargetId:id=>{if(!attached.has(id))throw new Error('not attached');return page;},

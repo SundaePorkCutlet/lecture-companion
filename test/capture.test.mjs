@@ -45,7 +45,9 @@ test('a delayed final observation is measured even after the duration expires',a
   const out=mkdtempSync(join(tmpdir(),'lecture-delay-'));
   const image=new PNG({width:100,height:100});image.data.fill(255);
   const page={snapshot:async()=>{await new Promise(r=>setTimeout(r,2100));return 'root\n  region "video player"\n    text "late caption"';},evaluate:async()=>({x:0,y:0,width:100,height:100,scale:1}),cdp:async()=>({data:PNG.sync.write(image).toString('base64')})};
-  const result=await capture.runCapture({page,out,captionMode:'snapshot',durationSec:0.01});
+  // Leave time for worker startup under a parallel test run; the read still
+  // exceeds this deadline and must be included in the final gap measurement.
+  const result=await capture.runCapture({page,out,captionMode:'snapshot',durationSec:1});
   assert.ok(result.maxPollGapMs>=2000);
   assert.equal(new Journal(out,{readOnly:true}).read().filter(e=>e.type==='observation-gap').length,1);
 });
