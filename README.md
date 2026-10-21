@@ -2,20 +2,29 @@
 
 An experimental local capture library and Codex skill for studying a subtitled lecture with an AI partner. The collector keeps repetitive browser observations out of the model context. The agent explains new evidence and writes combined notes.
 
-**v0.6:** automatically reuse Aside's managed Node as well as Codex/ego runtimes, without a separate Node/npm installation. The PNG library is included. The lecture worker keeps processing while a separate question chat reads fresh shared context on each question. Q&A saves independently and joins the final Markdown/JSON notes. No separate model API or speech service is required. The host AI still invokes commands and decides when to explain; this library does not wake model turns.
+**v0.7:** capture through Aside's official MCP REPL using its managed Node, without ego or a separate Node/npm installation. The PNG library is included. The lecture worker keeps processing while a separate question chat reads fresh shared context on each question. Q&A saves independently and joins the final Markdown/JSON notes. No separate model API or speech service is required. The host AI still invokes commands and decides when to explain; this library does not wake model turns. Native Aside end-to-end verification is still pending a ready browser/profile connection; the automated subprocess fixture tests pass.
 
-Capture requires ego lite + a visible subtitled player. No audio capture and no built-in model API. Accessible players use TextTrack `cuechange` or an explicit subtitle DOM selector with `MutationObserver`. A bounded event queue preserves short changes between reads and records play/pause/ratechange. Inaccessible cross-origin players use a clearly labeled 500 ms snapshot fallback. PNG processing runs in an independent external Node process. Only stable visual changes are saved; the whole selected player image is retained.
+Capture requires Aside with its official CLI connection, or ego lite, and a visible subtitled player. No audio capture and no built-in model API. Accessible players use TextTrack `cuechange` or an explicit subtitle DOM selector with `MutationObserver`. A bounded event queue preserves short changes between reads and records play/pause/ratechange. Inaccessible cross-origin players use a clearly labeled snapshot fallback (500 ms read target; browser work can delay it). PNG processing runs in an independent external Node process. Only stable visual changes are saved; the whole selected player image is retained.
 
 ## Run
 
-Download/clone the complete repository, including `vendor/`. On macOS/Linux, the launcher first honors explicit `LECTURE_NODE`, then checks Aside's managed `~/.aside/runtime/node/bin/node` (or `$ASIDE_HOME/runtime/node/bin/node`), the local Codex bundle, ego's embedded runtime, and an existing compatible Node. Candidate Nodes must be 22+. `LECTURE_NODE` can select a runtime path returned by the host's dependency tool. The launcher never downloads or installs Node or npm packages. Aside's sandboxed browser REPL is not used as a Node interpreter, and Chrome/Aside browser capture adapters are not implemented here.
+Download/clone the complete repository, including `vendor/`. On macOS/Linux, the launcher first honors explicit `LECTURE_NODE`, then checks Aside's managed `~/.aside/runtime/node/bin/node` (or `$ASIDE_HOME/runtime/node/bin/node`), the local Codex bundle, ego's embedded runtime, and an existing compatible Node. Candidate Nodes must be 22+. `LECTURE_NODE` can select a runtime path returned by the host's dependency tool. The launcher never downloads or installs Node or npm packages. Aside's sandboxed browser REPL controls the browser; imports and image processing run in managed Node.
 
-For capture, the current adapter still needs the `ego-browser` CLI connected to ego lite. Read its skill and obtain an authorized task space and page first. Study/Q&A/export commands do not control the browser. Windows users can invoke `bin/lecture.mjs` with a host-provided Node; an automatic PowerShell launcher is not included.
+For Aside capture, keep Aside open with a connected profile and enable its official CLI in Developer settings. The library locates the existing CLI on PATH or its standard installation paths. `LECTURE_ASIDE=/absolute/path/to/aside` selects a custom existing CLI; `ASIDE_CLI_INSTALL_DIR` is respected. Read [Aside capture setup and limits](skills/lecture-companion/references/aside.md), then select the authorized existing tab and exact player selector. For ego, read its skill and obtain an authorized task space/page. Study/Q&A/export commands do not control the browser. Windows users can invoke `bin/lecture.mjs` with a host-provided Node; an automatic PowerShell launcher is not included.
 
 ```sh
 ./bin/lecture doctor # checks the selected runtime and actual image worker
 ./bin/lecture help
 ./bin/lecture demo --out /absolute/path/to/private-demo
+
+# Aside only: list tabs, inspect the authorized original player via Aside REPL,
+# then use its actual targetId and unique CSS selector. No ego is needed.
+./bin/lecture tabs --browser aside
+./bin/lecture capture --browser aside --tab ACTUAL_TARGET_ID \
+  --out /absolute/path/to/aside-session --duration 1800 \
+  --selector '#player' --caption-selector '.subtitle'
+# Omit --caption-selector for native TextTrack captions.
+# Carry --account uN / --profile ID consistently if explicitly selected.
 
 # Use your existing authorized task space ID and player selector.
 ./bin/lecture capture --space 7 --page p1 \
@@ -38,11 +47,13 @@ For capture, the current adapter still needs the `ego-browser` CLI connected to 
 
 Start/pause/speed remain in the player. The collector prints small readiness notices; it does not send anything to a model. A separate tutoring agent reads new batches. The byte limit bounds the entire serialized response, not model token usage. Keep each batch's cursor until its notes are saved, then persist the returned `nextCursor`. Oversized events return a reference that must be inspected before acknowledgment.
 
-The skill's `scripts/lecture` uses the same launcher. No `npm ci` is required to run it. Maintainers with Node can run `npm test` or `node --test test/*.test.mjs`; the optional `npm run test:browser` exercises synthetic ego players. The legacy `.mjs` entry points remain available to callers that already have a host Node path.
+The skill's `scripts/lecture` uses the same launcher. No `npm ci` is required to run it. Maintainers with Node can run `npm test` or `node --test test/*.test.mjs`; optional `npm run test:browser` exercises synthetic ego players and `npm run test:aside` requires a ready Aside profile and opens only a synthetic localhost player. The legacy `.mjs` entry points remain available to callers that already have a host Node path.
 
 `--caption-mode auto` (default) tries events, then reports `fallbackReason` if snapshot capture is needed. `event` requires an accessible source; `snapshot` forces compatibility polling. The tested Fastcampus/Kollus cross-origin iframe still requires fallback. No browser security setting is changed. Enable the intended subtitle track first: among `captions`/`subtitles` tracks, the probe prefers the first showing track, then an enabled hidden track. Metadata/chapters tracks are ignored. An explicit DOM selector is used when no enabled caption track exists. Selectors are scoped to one selected player. Multiple visible iframe players are refused for screenshots.
 
 The event queue is read and acknowledged after journaling, holds at most 2048 events, and reports `caption-overflow` rather than silently implying full coverage. It observes seeks and media end, and journals subtitle disappearance as `caption-clear`. Normal shutdown freezes and drains the source before closing it and joining slow image work. Its lease cleans up listeners after reads stop, subject to browser timer throttling. A reload can lose undrained events; document identity/source loss stops capture. DOM updates coalesced within a single browser task and rendered/burned-in video subtitles cannot be reconstructed by this adapter.
+
+Aside keeps one MCP REPL session and serializes browser calls to avoid colliding evaluations. Its caption probe lease is 60 seconds, allowing a slow screenshot before the next buffered read. Snapshot fallback discards orphan iframe trees that Aside may append despite selector scoping, plus page metadata and controls. It reads text inside the selected player, which may include slide text. Native snapshot escaping cannot distinguish real newlines from literal backslash-n; fallback preserves backslashes. Tab/REPL loss, operation failure and timeouts stop capture without switching tabs or browsers. The borrowed lecture tab stays open. No model/agent tool is invoked by the collector.
 
 To install the Codex skill, link `skills/lecture-companion` into `~/.codex/skills/lecture-companion` (do not overwrite an existing skill). Keep the repository in place; the skill launcher imports its library. A new chat may be needed for automatic skill discovery. The launcher can be run immediately.
 
@@ -86,6 +97,8 @@ See [v0.5 app-runtime validation](docs/validation/2026-10-21-v05.md) for executi
 
 See [v0.6 Aside runtime validation](docs/validation/2026-10-21-v06.md) for automatic managed-runtime discovery and execution with a genuine verified Aside Node distribution.
 
+See [v0.7 Aside capture validation](docs/validation/2026-10-21-v07.md) for the independent review, automated coverage and native browser readiness limitation.
+
 The default outputs are `notes.md` and `study-notes.json`. Both include saved side-chat Q&A and identify the included question revision; export again after later answers finish. Existing manual files and edited generated files are refused; choose fresh explicit `--notes`/`--json` paths. Export reservations let an interrupted export be retried without losing saved work. Exports distinguish lecture observations, explanations, corrections, Q&A, unresolved questions and capture uncertainty. Source links identify evidence events; checking a source URL is the host agent's responsibility. Nothing here proves the learner understood a concept or reconstructs unobserved speech.
 
 ## Files and library
@@ -100,6 +113,7 @@ The default outputs are `notes.md` and `study-notes.json`. Both include saved si
 - `vendor/pngjs/`: unmodified MIT runtime dependency and its license/provenance; no package installation needed.
 - `src/player-frame.mjs`: screenshot bounds validation and cancellation before further browser commands.
 - `src/ego-capture.mjs`: independent caption/image loops; stops on source/worker failure, writes delays and local metrics.
+- `src/aside-browser.mjs`: discovered official Aside CLI, persistent MCP REPL, exact tab binding, scoped accessibility adapter and PNG transport into the shared capture loop.
 - `src/study-session.mjs`: follow/question/catch-up, persistent receipts, operation retries and bounded large-evidence reads.
 - `src/study-store.mjs`: separate writer lock, atomic state and capture-journal fingerprints.
 - `src/study-records.mjs`: evidence/record/disposition validation and safe local frame references.

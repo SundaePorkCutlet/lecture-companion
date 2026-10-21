@@ -91,7 +91,7 @@ export async function createCaptionSource(page,{selector,captionSelector=null,ca
   if(!['auto','event','snapshot'].includes(captionMode))throw new Error('captionMode must be auto, event, or snapshot');
   let fallbackReason=null;
   if(captionMode!=='snapshot'){
-    const probe=await page.evaluate(installCaptionProbe,{selector,captionSelector});
+    const probe=await page.evaluate(installCaptionProbe,{selector,captionSelector,...(page.captionLeaseMs?{leaseMs:page.captionLeaseMs}:{})});
     if(probe.available){
       return {kind:`event:${probe.source}`,fallbackReason:null,
         read:()=>page.evaluate(captionProbeCommand,{token:probe.token,action:'read'}),
@@ -102,7 +102,11 @@ export async function createCaptionSource(page,{selector,captionSelector=null,ca
     fallbackReason=probe.reason;
     if(captionMode==='event')throw new Error(`Event caption source unavailable: ${fallbackReason}`);
   }
-  return {kind:'ego-accessibility-poll',fallbackReason,
-    async read(){const snapshot=await page.snapshot(),state=parseSnapshot(snapshot);return {healthy:state.playerFound,state,events:[{type:'caption',text:state.caption,mediaTime:state.mediaTime}],rawBytes:Buffer.byteLength(snapshot)};},
+  return {kind:page.snapshotKind??'ego-accessibility-poll',fallbackReason,
+    async read(){
+      const observed=page.readCaptionSnapshot?await page.readCaptionSnapshot(selector):null;
+      const snapshot=observed?null:await page.snapshot(),state=observed?.state??parseSnapshot(snapshot);
+      return {healthy:state.playerFound,state,events:[{type:'caption',text:state.caption,mediaTime:state.mediaTime}],rawBytes:observed?.rawBytes??Buffer.byteLength(snapshot)};
+    },
     async ack(){},async close(){}};
 }

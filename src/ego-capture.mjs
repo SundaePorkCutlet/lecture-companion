@@ -7,12 +7,12 @@ import {VisualWorker} from './visual-worker.mjs';
 import {capturePlayerFrame} from './player-frame.mjs';
 
 export async function runCapture({page,out,durationSec=1800,pollMs=500,frameMs=2000,batchMs=90000,
-  selector='iframe[src*="kollus.com"]',captionSelector=null,captionMode='auto',imageNode=process.execPath,imageRuntime=null,source:providedSource,onNotice=()=>{}}){
+  selector='iframe[src*="kollus.com"]',captionSelector=null,captionMode='auto',browser='ego',imageNode=process.execPath,imageRuntime=null,source:providedSource,onNotice=()=>{}}){
   for(const v of [durationSec,pollMs,frameMs,batchMs])if(!Number.isFinite(v)||v<=0)throw new Error('Capture intervals must be positive');
   mkdirSync(out,{recursive:true,mode:0o700});
   const lock=join(out,'.capture.lock');closeSync(openSync(lock,'wx',0o600));
   const started=Date.now(),tracker=new CaptionTracker(),abort=new AbortController();
-  const metrics={state:'capturing',adapter:'resolving',fallbackReason:null,startedAt:new Date(started).toISOString(),pollMs,frameMs,
+  const metrics={state:'capturing',browser,adapter:'resolving',fallbackReason:null,startedAt:new Date(started).toISOString(),pollMs,frameMs,
     polls:0,captionEvents:0,frameSamples:0,framesSaved:0,maxPollGapMs:0,maxScreenshotMs:0,maxImageProcessingMs:0,
     captionEventsDropped:0,rawSnapshotBytes:0,modelCalls:0,tokenUsage:null,timestampMode:'source-dependent',imageProcessor:'external-node-process',
     limitations:['No audio captured. No completeness guarantee.','Bottom 20% masked only for comparison; changes confined there may be filtered.']};
@@ -51,7 +51,7 @@ export async function runCapture({page,out,durationSec=1800,pollMs=500,frameMs=2
     source=providedSource??await createCaptionSource(page,{selector,captionSelector,captionMode});
     metrics.adapter=source.kind;metrics.fallbackReason=source.fallbackReason;
     metrics.timestampMode=source.kind.startsWith('event:')?'observed media time and wall-clock':'wall-clock; mediaTime unavailable';
-    journal.append({type:'start',adapter:source.kind,fallbackReason:source.fallbackReason,mediaTime:null});
+    journal.append({type:'start',browser,adapter:source.kind,fallbackReason:source.fallbackReason,mediaTime:null});
     processor=new VisualWorker({nodeExecutable:imageNode,runtime:imageRuntime});status();onNotice({type:'started',out,adapter:source.kind,fallbackReason:source.fallbackReason});
     visualTask=(async()=>{
       while(!abort.signal.aborted){

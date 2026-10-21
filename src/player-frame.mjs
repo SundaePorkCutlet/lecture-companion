@@ -13,6 +13,7 @@ export async function capturePlayerFrame(page,selector,signal){
     return {x:r.x,y:r.y,width:r.width,height:r.height,scale:1};
   },selector);
   if(signal?.aborted)return null;
+  if(page.screenshot)return page.screenshot(clip);
   const shot=await page.cdp('Page.captureScreenshot',{format:'png',clip,captureBeyondViewport:false},{timeout:10000});
   return Buffer.from(shot.data,'base64');
 }
