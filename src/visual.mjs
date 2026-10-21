@@ -1,4 +1,4 @@
-import {PNG} from 'pngjs';
+import {PNG} from '../vendor/pngjs/lib/png.js';
 
 function difference(a,b){
   if(!a||a.length!==b.length)return 1;

@@ -1,0 +1,3 @@
+#!/bin/sh
+lecture_script_dir=$(CDPATH= cd "$(dirname "$0")" && pwd -P) || exit 1
+exec /bin/sh "$lecture_script_dir/../../../bin/lecture" "$@"

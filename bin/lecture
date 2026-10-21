@@ -1,0 +1,54 @@
+#!/bin/sh
+# Host-provided runtimes first. Never download or install a runtime here.
+case "$0" in /*) lecture_script=$0;; *) lecture_script=$(pwd)/$0;; esac
+lecture_links=0
+while [ -L "$lecture_script" ]; do
+  lecture_links=$((lecture_links + 1))
+  if [ "$lecture_links" -gt 40 ]; then echo 'Runtime launcher symlink loop.' >&2; exit 1; fi
+  lecture_link_dir=$(CDPATH= cd "$(dirname "$lecture_script")" && pwd -P) || exit 1
+  lecture_target=$(readlink "$lecture_script") || exit 1
+  case "$lecture_target" in /*) lecture_script=$lecture_target;; *) lecture_script=$lecture_link_dir/$lecture_target;; esac
+done
+lecture_bin_dir=$(CDPATH= cd "$(dirname "$lecture_script")" && pwd -P) || exit 1
+lecture_entry="$lecture_bin_dir/lecture.mjs"
+lecture_valid_node() {
+  [ -x "$1" ] || return 1
+  lecture_version=$("$1" --version 2>/dev/null) || return 1
+  lecture_major=${lecture_version#v}; lecture_major=${lecture_major%%.*}
+  case "$lecture_major" in ''|*[!0-9]*) return 1;; esac
+  [ "$lecture_major" -ge 22 ]
+}
+if [ -n "${LECTURE_NODE:-}" ]; then
+  if ! lecture_valid_node "$LECTURE_NODE"; then
+    echo 'LECTURE_NODE must name a supported host Node runtime (22+).' >&2; exit 1
+  fi
+  LECTURE_RUNTIME_PROVIDER=configured exec "$LECTURE_NODE" "$lecture_entry" "$@"
+fi
+lecture_bundled="${HOME:-}/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node"
+if [ -n "${HOME:-}" ] && lecture_valid_node "$lecture_bundled"; then
+  LECTURE_RUNTIME_PROVIDER=codex-bundled exec "$lecture_bundled" "$lecture_entry" "$@"
+fi
+lecture_ego=$(command -v ego-browser 2>/dev/null || true)
+if [ -n "$lecture_ego" ]; then
+  umask 077
+  lecture_temp=$(mktemp -d "${TMPDIR:-/tmp}/lecture-runtime.XXXXXXXX") || exit 1
+  trap 'rm -rf "$lecture_temp"' 0
+  trap 'exit 130' 2
+  trap 'exit 143' 15
+  # NUL-separated data, never shell/JavaScript interpolation of user arguments.
+  printf '%s\000' "$lecture_ego" "$lecture_entry" "$@" > "$lecture_temp/args"
+  lecture_hex=$(printf '%s' "$lecture_temp/args" | od -An -v -tx1 | tr -d ' \n')
+  lecture_source="const fs=await import('node:fs');const url=await import('node:url');const packet=fs.readFileSync(Buffer.from('$lecture_hex','hex').toString('utf8'),'utf8').split('\\0');packet.pop();const [command,entry,...args]=packet;globalThis.__lectureRuntime={provider:'ego',command};process.argv=[process.execPath,entry,...args];if(Number(process.versions.node.split('.')[0])<22)throw new Error('Host runtime requires Node 22+');await import(url.pathToFileURL(entry).href);"
+  # Keep streaming JSON on stdout and preserve the actual host exit status.
+  ( "$lecture_ego" nodejs -e "$lecture_source"; printf '%s' "$?" > "$lecture_temp/status" ) |
+    awk '/^\[ego-browser:notice\]/ { print > "/dev/stderr"; next } { print; fflush() }'
+  if [ ! -f "$lecture_temp/status" ]; then exit 1; fi
+  lecture_status=$(cat "$lecture_temp/status")
+  exit "$lecture_status"
+fi
+lecture_node=$(command -v node 2>/dev/null || true)
+if [ -n "$lecture_node" ] && lecture_valid_node "$lecture_node"; then
+  LECTURE_RUNTIME_PROVIDER=existing-node exec "$lecture_node" "$lecture_entry" "$@"
+fi
+echo 'No supported host runtime found. Ask the agent to locate its bundled Node (LECTURE_NODE) or enable its ego runtime. No runtime was installed.' >&2
+exit 1

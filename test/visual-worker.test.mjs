@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {PNG} from 'pngjs';
+import {PNG} from '../vendor/pngjs/lib/png.js';
 import * as api from '../src/visual-worker.mjs';
 
 test('real image worker preserves full image and filters duplicate frames',async()=>{

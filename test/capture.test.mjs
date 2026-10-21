@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,readFileSync,existsSync,writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
-import {PNG} from 'pngjs';
+import {PNG} from '../vendor/pngjs/lib/png.js';
 import * as capture from '../src/ego-capture.mjs';
 import {Journal} from '../src/core.mjs';
 

@@ -1,10 +1,11 @@
 import {fork} from 'node:child_process';
+import {EgoImageWorker} from './ego-image-worker.mjs';
 
 export class VisualWorker {
-  constructor({workerURL=new URL('./visual-worker-process.mjs',import.meta.url),nodeExecutable=process.execPath,timeoutMs=10000}={}){
+  constructor({workerURL=new URL('./visual-worker-process.mjs',import.meta.url),nodeExecutable=process.execPath,timeoutMs=10000,runtime=null}={}){
     this.timeoutMs=timeoutMs;this.closed=false;this.pending=null;this.failure=null;
     // JSON/base64 works across ego's embedded Node/V8 and the host Node version.
-    this.worker=fork(workerURL,[],{execPath:nodeExecutable,execArgv:[],serialization:'json',stdio:['ignore','ignore','ignore','ipc']});
+    this.worker=runtime?.provider==='ego'?new EgoImageWorker(runtime.command):fork(workerURL,[],{execPath:nodeExecutable,execArgv:[],serialization:'json',stdio:['ignore','ignore','ignore','ipc']});
     this.worker.on('message',result=>{
       const pending=this.pending;if(!pending)return;
       clearTimeout(pending.timer);this.pending=null;
@@ -25,12 +26,15 @@ export class VisualWorker {
     });
   }
   async close(){
-    if(this.closed)return;this.closed=true;
+    if(this.closePromise)return this.closePromise;this.closed=true;
     this.fail(new Error('Image worker closed'));
-    if(this.worker.exitCode!==null||this.worker.signalCode!==null)return;
-    await new Promise(resolve=>{
-      const timer=setTimeout(()=>this.worker.kill('SIGKILL'),1000);
-      this.worker.once('exit',()=>{clearTimeout(timer);resolve();});this.worker.kill();
-    });
+    this.closePromise=(async()=>{
+      if(this.worker.exitCode!==null||this.worker.signalCode!==null)return;
+      await new Promise(resolve=>{
+        const timer=setTimeout(()=>this.worker.kill('SIGKILL'),1000);
+        this.worker.once('exit',()=>{clearTimeout(timer);resolve();});this.worker.kill();
+      });
+    })();
+    return this.closePromise;
   }
 }

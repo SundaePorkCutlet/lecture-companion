@@ -1,6 +1,6 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {PNG} from 'pngjs';
+import {PNG} from '../vendor/pngjs/lib/png.js';
 import * as adapter from '../src/snapshot.mjs';
 import * as visual from '../src/visual.mjs';
 

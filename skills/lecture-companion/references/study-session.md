@@ -1,6 +1,6 @@
 # Study session command reference
 
-Use the skill's absolute `scripts/lecture.mjs` launcher with Node 22+. Examples below use `node bin/lecture.mjs` from the repository. `SESSION` is an existing private capture directory; input JSON files should live there too. These commands do not call a model or control the player.
+Use `/bin/sh ABS_SKILL/scripts/lecture` with the host runtime selected automatically. No separate Node/npm installation is required when a supported host runtime is available. Examples below use `./bin/lecture` from the repository. `SESSION` is an existing private capture directory; input JSON files should live there too. These commands do not call a model or control the player.
 
 ## Follow and commit
 
