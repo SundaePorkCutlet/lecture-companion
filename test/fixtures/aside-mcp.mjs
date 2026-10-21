@@ -14,11 +14,24 @@ const page={evaluate:async(fn,arg)=>fn(arg),screenshot:async({clip})=>{
   for(let y=0;y<clip.height;y++)image.data.copy(cropped.data,y*clip.width*4,y*800*4,(y*800+clip.width)*4);
   return PNG.sync.write(cropped);
 }};
-const tabs=[{targetId:'lecture-1',title:'Synthetic lecture',url:'http://localhost/lecture',active:false},{targetId:'private-2',title:'Other tab',url:'http://localhost/private',active:true}];
+const tabs=[{targetId:'lecture-1',title:'Synthetic lecture',url:'http://localhost/lecture?jwt=PRIVATE',active:false},{targetId:'private-2',title:'Other tab',url:'http://localhost/private',active:true}];
+const caption={id:'caption',contains:()=>false};
+function player(id,y){
+  const selected={id,tagName:'SECTION',getAttribute:name=>name==='aria-label'?'video player':null,
+    getBoundingClientRect:()=>({x:16,y:y+(context.fixtureOffset??0),width:120,height:100,right:136,bottom:y+100+(context.fixtureOffset??0)}),
+    matches:()=>false,querySelectorAll:selector=>selector==='video'?[video]:[caption]};
+  const video={id:`video-${id}`,tagName:'VIDEO',getBoundingClientRect:selected.getBoundingClientRect,closest:()=>selected,textTracks:[]};
+  return {selected,video};
+}
+const first=player('player',24),second=player('player2',process.env.LECTURE_FIXTURE_OFFSCREEN?900:200);
+const all=process.env.LECTURE_FIXTURE_TWO_PLAYERS?[first,second]:[first];
+if(process.env.LECTURE_FIXTURE_IFRAMES)for(const item of all){item.selected.tagName='IFRAME';item.selected.contentDocument=item.selected;}
+const resource={id:'resource',tagName:'IFRAME',getAttribute:()=>null,getBoundingClientRect:first.selected.getBoundingClientRect,
+  contentDocument:{matches:()=>false,querySelectorAll:()=>[]}};
 let lines=[],busy=false;
 const context=createContext({Buffer,setTimeout,console:{log:s=>lines.push(String(s))},
-  innerWidth:800,innerHeight:600,devicePixelRatio:1,
-  document:{querySelectorAll:selector=>selector==='#player'?[{tagName:'SECTION',getBoundingClientRect:()=>({x:16,y:24+(context.fixtureOffset??0),width:120,height:100,right:136,bottom:124+(context.fixtureOffset??0)})}]:[]},
+  innerWidth:800,innerHeight:600,devicePixelRatio:1,CSS:{escape:value=>value},getComputedStyle:()=>({visibility:'visible',display:'block'}),
+  document:{querySelectorAll:selector=>process.env.LECTURE_FIXTURE_RESOURCE_FRAME?(['iframe','video,iframe','#resource'].includes(selector)?[resource]:[]):process.env.LECTURE_FIXTURE_IFRAMES&&['iframe','video,iframe'].includes(selector)?all.map(p=>p.selected):selector==='video,iframe'?all.map(p=>p.video):all.filter(p=>selector===`#${p.selected.id}`).map(p=>p.selected)},
   listBrowserTabs:async()=>tabs,
   attachBrowserTab:async id=>{if(id!=='lecture-1')throw new Error('wrong target');attached.set(id,page);return page;},
   getTabByTargetId:id=>{if(!attached.has(id))throw new Error('not attached');return page;},

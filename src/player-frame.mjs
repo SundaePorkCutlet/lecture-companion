@@ -4,7 +4,7 @@ export function measurePlayer(selector){
     if(nodes.length!==1)throw new Error('Choose exactly one player element');
     if(nodes[0].tagName==='IFRAME'){
       const visible=[...document.querySelectorAll('iframe')].filter(f=>{
-        const r=f.getBoundingClientRect();return r.width>50&&r.height>50&&getComputedStyle(f).visibility!=='hidden'&&getComputedStyle(f).display!=='none';
+        const r=f.getBoundingClientRect();return r.width>=50&&r.height>=50&&r.x+r.width>0&&r.y+r.height>0&&r.x<innerWidth&&r.y<innerHeight&&getComputedStyle(f).visibility!=='hidden'&&getComputedStyle(f).display!=='none';
       });
       if(visible.length!==1||visible[0]!==nodes[0])throw new Error('Exactly one visible player iframe is supported');
     }

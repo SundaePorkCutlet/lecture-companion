@@ -4,7 +4,7 @@ Use the existing Codex/Claude Code host. No new model API, speech service or sep
 
 ## Lecture worker: prepare and open once
 
-After capture has started and `study init` succeeded, run the skill launcher with `study chat --out ABS_SESSION --host codex --title TITLE`. Add `--worker-thread ACTUAL_ID` only when the current ID is known from trusted runtime context. The result reserves one opening attempt in `questions.json` independently of `study.json`.
+Guided `start` already initializes study and reserves the chat. Its `question-chat-required` event carries `chat` metadata and a private `promptFile`; read that file and use it as the native host's initial prompt. Do not rerun `study init` or create another reservation. For manual capture, after `study init` succeeds run `study chat --out ABS_SESSION --host codex --title TITLE`. Add `--worker-thread ACTUAL_ID` only when the current ID is known from trusted runtime context. The result reserves one opening attempt in `questions.json` independently of `study.json`.
 
 - `action=create`: use the result's `prompt` to create a fresh question chat through the host's native chat-creation tool. Do not fork the whole worker history. In Codex desktop, use `create_thread`: first `list_projects`, choose this exact project's local path if available, then create in its local environment. Preserve the user's model settings by omitting overrides. The user must have requested the separate chat in this invocation or earlier context; this guide does not grant authorization.
 - Once creation returns a real `threadId`, save `{ "setupId": "FROM_PREPARE", "threadId": "ACTUAL_ID" }` to a private JSON file and run `study chat-bind --out ABS_SESSION --file FILE`. A queued `clientThreadId` is not a usable thread ID; resolve setup before binding or navigating.
@@ -15,6 +15,8 @@ After capture has started and `study init` succeeded, run the skill launcher wit
 Always attach the created-thread directive required by the host in the final response. Do not push journal chunks or follow-up messages to the question chat. The initial role prompt is sufficient; subsequent user questions cause fresh context reads.
 
 Codex has a native `/side` command for temporary side chats, but automatic invocation depends on host capabilities. Claude Code `/btw` runs alongside a main turn but has no file/tool access; it cannot read an updated local lecture snapshot or save Q&A. For the full workflow use a supported, separate full-tool Claude Code session with the generated role prompt (`--host claude-code`). If no native opener is available, disclose the manual step; do not silently fall back to an SDK/API or claim the chat opened.
+
+For Claude Code, `start --host claude-code` also returns a shell-quoted `manualCommand`: `claude --append-system-prompt-file ABS_PROMPT_FILE`. Run it in a second terminal with the user's existing Claude login; it preserves the default system/tool instructions and adds this question role. This is an interactive full-tool session, not print/SDK mode. Use an actual supported host/session mechanism to verify its ID before binding. If the installed CLI lacks the flag or cannot start, open a normal full-tool session and paste the private prompt file instead. No permission-bypass flags or API-key setup are needed. See the [official CLI reference](https://code.claude.com/docs/en/cli-reference).
 
 ## Question-only role
 

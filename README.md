@@ -1,8 +1,39 @@
 # Lecture Companion
 
-An experimental local capture library and Codex skill for studying a subtitled lecture with an AI partner. The collector keeps repetitive browser observations out of the model context. The agent explains new evidence and writes combined notes.
+An experimental local capture library and Codex/Claude Code skill for studying a subtitled lecture with an AI partner. The collector keeps repetitive browser observations out of the model context. The agent explains new evidence and writes combined notes.
 
-**v0.7.1:** capture through Aside's official MCP REPL using its managed Node, without ego or a separate Node/npm installation. Native Aside tests now cover rapid DOM captions, TextTrack cues, a cross-origin player, player-only PNGs and Q&A export while capture continues; see the [installed-browser validation](docs/validation/2026-10-21-v071.md). The PNG library is included. The lecture worker keeps processing while a separate question chat reads fresh shared context on each question. Q&A saves independently and joins the final Markdown/JSON notes. No separate model API or speech service is required. The host AI still invokes commands and decides when to explain; this library does not wake model turns.
+## 5분 시작하기 · Aside
+
+Codex 또는 Claude Code와 Aside에 로그인되어 있다면, 강의 제목을 골라 시작할 수 있습니다. macOS/Linux용이며 Node/npm을 따로 설치할 필요가 없습니다. 앱 다운로드·첫 로그인 시간은 별도입니다.
+
+1. 이 저장소를 **전체 폴더로** 다운로드하고 압축을 풉니다. `vendor/`도 포함해야 합니다. 터미널에서 그 폴더를 엽니다.
+2. 한 번 설치합니다.
+
+   ```sh
+   /bin/sh install.sh                     # Codex
+   # Claude Code 사용자: /bin/sh install.sh --host claude-code
+   # 둘 다 사용: /bin/sh install.sh --host both
+   ```
+
+3. Aside에서 강의를 열고 자막을 켭니다. 첫 설치라면 Aside의 로그인·프로필 설정과 Developer 설정의 공식 CLI 연결을 마칩니다.
+4. Codex에 **“$lecture-companion으로 Aside 강의를 골라 같이 공부하고 질문 채팅도 열어줘”**라고 입력합니다. Claude Code에서는 `/lecture-companion Aside 강의를 골라 같이 공부하고 질문 채팅도 준비해줘`를 사용합니다. 강의가 여러 개면 제목만 선택하면 됩니다.
+
+스킬이 안 보이면 새 채팅을 열거나 설치 결과에 나온 절대 경로의 `SKILL.md`를 읽어 달라고 요청하세요. 설치는 기존 스킬을 덮어쓰지 않으며, 원본 저장소 폴더를 유지해야 합니다.
+
+에이전트가 플레이어·자막을 찾아 수집과 질문 채팅 준비를 함께 시작합니다. Codex의 지원되는 채팅 도구로 질문 채팅을 열고, 질문마다 최신 강의 문맥을 읽습니다. 자동 열기 도구가 없는 호스트에서는 질문 프롬프트와 별도 터미널 명령을 제공합니다. **자막·이미지 수집과 실제 채팅 연결을 확인한 뒤 준비 완료를 표시합니다.** 질문·답변은 최종 노트에 함께 저장됩니다.
+
+에이전트/개발자용 빠른 경로:
+
+```sh
+./bin/lecture setup                       # 제목 목록과 필요한 연결 조치
+./bin/lecture setup --tab ACTUAL_ID       # 관찰한 플레이어와 startArgs
+./bin/lecture start --tab ACTUAL_ID       # 백그라운드 실행: 선택자·세션 경로 자동
+./bin/lecture check --out ACTUAL_SESSION  # 수집 근거와 실제 질문 채팅 연결 확인
+```
+
+`start`는 강의를 재생하거나 속도를 바꾸지 않습니다. 여러 플레이어가 보이면 추가 선택을 요청하고, 창 밖으로 잘린 플레이어는 먼저 완전히 보이게 해야 합니다. ego는 아래 기존 수동/스킬 경로를 사용합니다. Claude Code 스킬 설치 위치와 질문 세션 옵션은 [공식 스킬 문서](https://code.claude.com/docs/en/skills), [CLI 문서](https://code.claude.com/docs/en/cli-reference)를 따릅니다.
+
+**v0.8:** one-command skill installation for Codex/Claude Code, title-based Aside setup, player/subtitle discovery, and one `start` command for capture, study state and a native question-chat handoff. `check` verifies saved evidence, capture liveness and chat binding. See the [first-run validation](docs/validation/2026-10-21-v08.md) for measured native scope and remaining manual steps. The [v0.7.1 native capture tests](docs/validation/2026-10-21-v071.md) cover rapid DOM captions, TextTrack cues, a cross-origin player, player-only PNGs and Q&A export while capture continues. The lecture worker keeps processing while a separate question chat reads fresh shared context on each question. Q&A saves independently and joins the final Markdown/JSON notes. No separate model API or speech service is required. The host AI still invokes commands and decides when to explain; this library does not wake model turns.
 
 Capture requires Aside with its official CLI connection, or ego lite, and a visible subtitled player. No audio capture and no built-in model API. Accessible players use TextTrack `cuechange` or an explicit subtitle DOM selector with `MutationObserver`. A bounded event queue preserves short changes between reads and records play/pause/ratechange. Inaccessible cross-origin players use a clearly labeled snapshot fallback (500 ms read target; browser work can delay it). PNG processing runs in an independent external Node process. Only stable visual changes are saved; the whole selected player image is retained.
 
@@ -55,7 +86,7 @@ The event queue is read and acknowledged after journaling, holds at most 2048 ev
 
 Aside keeps one MCP REPL session and serializes browser calls to avoid colliding evaluations. Its caption probe lease is 60 seconds, allowing a slow screenshot before the next buffered read. To work around the tested Aside screenshot clip-origin bug, a viewport PNG stays transient in local memory/IPC and the external image worker crops it before comparison or saving. Geometry checks around the screenshot and observed pixel-ratio validation stop capture if its viewport/player bounds change. Snapshot fallback discards orphan iframe trees that Aside may append despite selector scoping, plus page metadata and controls. It reads text inside the selected player, which may include slide text. Native snapshot escaping cannot distinguish real newlines from literal backslash-n; fallback preserves backslashes. Tab/REPL loss, operation failure and timeouts stop capture without switching tabs or browsers. The borrowed lecture tab stays open. No model/agent tool is invoked by the collector.
 
-To install the Codex skill, link `skills/lecture-companion` into `~/.codex/skills/lecture-companion` (do not overwrite an existing skill). Keep the repository in place; the skill launcher imports its library. A new chat may be needed for automatic skill discovery. The launcher can be run immediately.
+Install with `/bin/sh install.sh` for Codex, `--host claude-code` for Claude Code, or `--host both`. For advanced manual setup, link `skills/lecture-companion` into the host's personal skills directory without overwriting an existing skill. Keep the repository in place; the skill launcher imports its library. A new chat may be needed for automatic discovery; the installed launcher can be run immediately.
 
 ## Study while the lecture continues
 
