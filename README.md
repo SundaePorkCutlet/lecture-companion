@@ -2,13 +2,13 @@
 
 An experimental local capture library and Codex skill for studying a subtitled lecture with an AI partner. The collector keeps repetitive browser observations out of the model context. The agent explains new evidence and writes combined notes.
 
-**v0.5:** use an app-provided runtime without a separate Node/npm installation. The launcher selects a compatible host runtime and the PNG library is included. The lecture worker keeps processing while a separate question chat reads fresh shared context on each question. Q&A saves independently and joins the final Markdown/JSON notes. No separate model API or speech service is required. The host AI still invokes commands and decides when to explain; this library does not wake model turns.
+**v0.6:** automatically reuse Aside's managed Node as well as Codex/ego runtimes, without a separate Node/npm installation. The PNG library is included. The lecture worker keeps processing while a separate question chat reads fresh shared context on each question. Q&A saves independently and joins the final Markdown/JSON notes. No separate model API or speech service is required. The host AI still invokes commands and decides when to explain; this library does not wake model turns.
 
 Capture requires ego lite + a visible subtitled player. No audio capture and no built-in model API. Accessible players use TextTrack `cuechange` or an explicit subtitle DOM selector with `MutationObserver`. A bounded event queue preserves short changes between reads and records play/pause/ratechange. Inaccessible cross-origin players use a clearly labeled 500 ms snapshot fallback. PNG processing runs in an independent external Node process. Only stable visual changes are saved; the whole selected player image is retained.
 
 ## Run
 
-Download/clone the complete repository, including `vendor/`. On macOS/Linux, the launcher uses an app-provided Node 22+ runtime: a known local Codex bundle, ego's embedded runtime, or an existing compatible Node. `LECTURE_NODE` can select a runtime path returned by the host's dependency tool. It never downloads or installs Node or npm packages. Other host bundles, including Aside, need their actual runtime path/capability verified; their browser adapters are not implemented here.
+Download/clone the complete repository, including `vendor/`. On macOS/Linux, the launcher first honors explicit `LECTURE_NODE`, then checks Aside's managed `~/.aside/runtime/node/bin/node` (or `$ASIDE_HOME/runtime/node/bin/node`), the local Codex bundle, ego's embedded runtime, and an existing compatible Node. Candidate Nodes must be 22+. `LECTURE_NODE` can select a runtime path returned by the host's dependency tool. The launcher never downloads or installs Node or npm packages. Aside's sandboxed browser REPL is not used as a Node interpreter, and Chrome/Aside browser capture adapters are not implemented here.
 
 For capture, the current adapter still needs the `ego-browser` CLI connected to ego lite. Read its skill and obtain an authorized task space and page first. Study/Q&A/export commands do not control the browser. Windows users can invoke `bin/lecture.mjs` with a host-provided Node; an automatic PowerShell launcher is not included.
 
@@ -83,6 +83,8 @@ Study state schema 2 fingerprints observed journal evidence independently of the
 See [v0.4 native chat validation and limitations](docs/validation/2026-10-20-v04.md) for the actual Codex chat demonstration, independent review corrections and final test results.
 
 See [v0.5 app-runtime validation](docs/validation/2026-10-21-v05.md) for execution without PATH Node or node_modules, actual Codex/ego runtime checks and current platform limits.
+
+See [v0.6 Aside runtime validation](docs/validation/2026-10-21-v06.md) for automatic managed-runtime discovery and execution with a genuine verified Aside Node distribution.
 
 The default outputs are `notes.md` and `study-notes.json`. Both include saved side-chat Q&A and identify the included question revision; export again after later answers finish. Existing manual files and edited generated files are refused; choose fresh explicit `--notes`/`--json` paths. Export reservations let an interrupted export be retried without losing saved work. Exports distinguish lecture observations, explanations, corrections, Q&A, unresolved questions and capture uncertainty. Source links identify evidence events; checking a source URL is the host agent's responsibility. Nothing here proves the learner understood a concept or reconstructs unobserved speech.
 

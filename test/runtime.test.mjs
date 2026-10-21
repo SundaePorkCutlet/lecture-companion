@@ -10,7 +10,7 @@ function isolated(){
   const root=mkdtempSync(join(tmpdir(),'lecture packaged-')),repo=join(root,'skill repo'),home=join(root,'home');
   mkdirSync(repo);mkdirSync(home);
   for(const name of ['bin','src','skills','package.json','vendor'])if(existsSync(name))cpSync(name,join(repo,name),{recursive:true});
-  const env={...process.env,HOME:home,PATH:'/usr/bin:/bin'};delete env.LECTURE_NODE;delete env.LECTURE_RUNTIME;
+  const env={...process.env,HOME:home,PATH:'/usr/bin:/bin'};delete env.LECTURE_NODE;delete env.LECTURE_RUNTIME;delete env.ASIDE_HOME;
   const run=(args,extra={})=>spawnSync('/bin/sh',[join(repo,'bin/lecture'),...args],{env:{...env,...extra},encoding:'utf8',timeout:10000});
   return {root,repo,home,env,run};
 }
@@ -91,4 +91,34 @@ test('the package launcher resolves relative and absolute symlink chains before 
   symlinkSync(join(fixture.repo,'bin/lecture'),second);symlinkSync(relative(dirname(first),second),first);
   const result=spawnSync('/bin/sh',[first,'doctor'],{env:fixture.env,encoding:'utf8',timeout:10000});
   assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).imageWorker.duplicateFiltered,true);
+});
+
+function asideNode(root){
+  const path=join(root,'runtime/node/bin/node');mkdirSync(dirname(path),{recursive:true});symlinkSync(process.execPath,path);return path;
+}
+
+test('Aside managed Node is selected automatically without PATH Node, npm packages or CLI calls',()=>{
+  const fixture=isolated();asideNode(join(fixture.home,'.aside'));bundledNode(fixture.home);
+  const result=fixture.run(['doctor']);assert.equal(result.status,0,result.stderr);
+  const doctor=JSON.parse(result.stdout);assert.equal(doctor.runtime.provider,'aside');assert.equal(doctor.imageWorker.duplicateFiltered,true);
+  assert.equal(existsSync(join(fixture.repo,'node_modules')),false);
+});
+
+test('custom Aside home shares its selected runtime with a fresh question chat',()=>{
+  const fixture=isolated(),asideHome=join(fixture.root,"Aside ' 사용자 홈"),override={ASIDE_HOME:asideHome};asideNode(asideHome);
+  const check=fixture.run(['doctor'],override);assert.equal(check.status,0,check.stderr);assert.equal(JSON.parse(check.stdout).runtime.provider,'aside');
+  const dir=join(fixture.root,'private lecture');
+  assert.equal(fixture.run(['demo','--out',dir],override).status,0);assert.equal(fixture.run(['study','init','--out',dir],override).status,0);
+  const result=fixture.run(['study','chat','--out',dir],override);assert.equal(result.status,0,result.stderr);
+  const command=JSON.parse(result.stdout).prompt.split('\n').find(line=>line.includes(' study context '));
+  const context=spawnSync('/bin/sh',['-c',command],{env:fixture.env,encoding:'utf8',timeout:10000});
+  assert.equal(context.status,0,context.stderr);assert.equal(JSON.parse(context.stdout).capturedThrough,22);
+});
+
+test('incompatible Aside runtime falls back without launching its CLI or modifying its installation',()=>{
+  const fixture=isolated();bundledNode(fixture.home);
+  const nodePath=join(fixture.home,'.aside/runtime/node/bin/node');mkdirSync(dirname(nodePath),{recursive:true});
+  writeFileSync(nodePath,'#!/bin/sh\nprintf "v20.0.0\\n"\n',{mode:0o700});
+  const before=readFileSync(nodePath,'utf8'),result=fixture.run(['doctor']);
+  assert.equal(result.status,0,result.stderr);assert.equal(JSON.parse(result.stdout).runtime.provider,'codex-bundled');assert.equal(readFileSync(nodePath,'utf8'),before);
 });

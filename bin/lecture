@@ -24,6 +24,13 @@ if [ -n "${LECTURE_NODE:-}" ]; then
   fi
   LECTURE_RUNTIME_PROVIDER=configured exec "$LECTURE_NODE" "$lecture_entry" "$@"
 fi
+# Aside manages its standalone Node separately from the sandboxed browser REPL.
+# ASIDE_HOME is the app's supported home override; never invoke agent mode here.
+lecture_aside_home=${ASIDE_HOME:-}
+if [ -z "$lecture_aside_home" ] && [ -n "${HOME:-}" ]; then lecture_aside_home="$HOME/.aside"; fi
+if [ -n "$lecture_aside_home" ] && lecture_valid_node "$lecture_aside_home/runtime/node/bin/node"; then
+  LECTURE_RUNTIME_PROVIDER=aside exec "$lecture_aside_home/runtime/node/bin/node" "$lecture_entry" "$@"
+fi
 lecture_bundled="${HOME:-}/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin/node"
 if [ -n "${HOME:-}" ] && lecture_valid_node "$lecture_bundled"; then
   LECTURE_RUNTIME_PROVIDER=codex-bundled exec "$lecture_bundled" "$lecture_entry" "$@"
@@ -50,5 +57,5 @@ lecture_node=$(command -v node 2>/dev/null || true)
 if [ -n "$lecture_node" ] && lecture_valid_node "$lecture_node"; then
   LECTURE_RUNTIME_PROVIDER=existing-node exec "$lecture_node" "$lecture_entry" "$@"
 fi
-echo 'No supported host runtime found. Ask the agent to locate its bundled Node (LECTURE_NODE) or enable its ego runtime. No runtime was installed.' >&2
+echo 'No supported host runtime found. Ask the agent to locate its bundled Node (LECTURE_NODE), check Aside managed runtime readiness, or use its ego runtime. No runtime was installed.' >&2
 exit 1
