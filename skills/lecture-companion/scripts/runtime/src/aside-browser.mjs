@@ -111,7 +111,7 @@ export async function connectAsidePage({targetId,...options}){
         const snapshot=await client.json(`snapshot(${ref},{selector:${JSON.stringify(selector)}})`);
         return {state:parseAsideSnapshot(snapshot.tree),rawBytes:Buffer.byteLength(snapshot.tree)};
       },
-      async screenshot(clip,viewport,selector){
+      async capturePlayerScreenshot(clip,viewport,selector){
         // Native Aside 1.26.1021 ignored screenshot clip origins. Capture the
         // viewport and crop in the existing external image worker instead.
         const expected={...clip,viewportWidth:viewport.width,viewportHeight:viewport.height,pixelRatio:viewport.pixelRatio};

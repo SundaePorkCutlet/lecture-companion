@@ -19,7 +19,7 @@ export async function capturePlayerFrame(page,selector,signal){
   const {viewportWidth,viewportHeight,pixelRatio,...clip}=bounds;
   // Some adapters return an uncropped PNG plus crop metadata. Only the image
   // worker's result is publishable; never persist this intermediate packet.
-  if(page.screenshot)return page.screenshot(clip,{width:viewportWidth,height:viewportHeight,pixelRatio},selector);
+  if(page.capturePlayerScreenshot)return page.capturePlayerScreenshot(clip,{width:viewportWidth,height:viewportHeight,pixelRatio},selector);
   const shot=await page.cdp('Page.captureScreenshot',{format:'png',clip,captureBeyondViewport:false},{timeout:10000});
   return Buffer.from(shot.data,'base64');
 }

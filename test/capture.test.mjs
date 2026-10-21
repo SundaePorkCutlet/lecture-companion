@@ -7,13 +7,14 @@ import {PNG} from '../vendor/pngjs/lib/png.js';
 import * as capture from '../src/ego-capture.mjs';
 import {Journal} from '../src/core.mjs';
 
-test('collector persists actual caption changes and frames without sending raw snapshots',async()=>{
+test('ego collection persists captions and PNGs despite the native page screenshot method',async()=>{
   const out=mkdtempSync(join(tmpdir(),'lecture-capture-'));
   const image=new PNG({width:100,height:100});image.data.fill(255);const png=PNG.sync.write(image);
   let n=0;const notices=[];
   const page={
     snapshot:async()=>`root\n  region "video player"\n    video\n    text "${++n<3?'첫 번째 자막':'두 번째 자막'}"`,
     evaluate:async()=>({x:0,y:0,width:100,height:100,scale:1}),
+    screenshot:async()=>{throw new TypeError('page.screenshot received unknown option: x');},
     cdp:async()=>({data:png.toString('base64')})
   };
   await capture.runCapture({page,out,captionMode:'snapshot',durationSec:3,pollMs:10,frameMs:20,batchMs:50,onNotice:x=>{
