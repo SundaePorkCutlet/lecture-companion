@@ -4,7 +4,7 @@ Study a subtitled lecture with your usual AI agent. Ask questions in a separate 
 
 **Experimental · Codex / Claude Code · Aside / ego · macOS / Linux**
 
-[한국어](README.ko.md) · [Example notes](examples/containers/notes.md) · [Technical reference](docs/reference.md)
+[한국어](README.ko.md) · [Download v0.10](https://github.com/SundaePorkCutlet/lecture-companion/releases/tag/v0.10.0) · [Example notes](examples/containers/notes.md) · [Technical reference](docs/reference.md)
 
 ## What you get
 
@@ -16,7 +16,7 @@ The collector makes no model calls. Your agent still uses its normal allowance o
 
 ## Start with a lecture
 
-1. Install **`skills/lecture-companion`** with your agent's skill installer. The folder includes the collector, runtime code and PNG library; you can remove the downloaded repository afterward.
+1. Install **[`skills/lecture-companion`](https://github.com/SundaePorkCutlet/lecture-companion/tree/main/skills/lecture-companion)** with your agent's skill installer, or download the [standalone skill ZIP](https://github.com/SundaePorkCutlet/lecture-companion/releases/download/v0.10.0/lecture-companion-0.10.0.zip) and use the installer below. The folder includes the collector, runtime code and PNG library; you can remove the downloaded repository afterward.
 2. Open the lecture in **Aside or ego**, turn on visible subtitles, and keep the full player visible. Finish the browser's account/profile and CLI connection first.
 3. In Codex, ask:
 

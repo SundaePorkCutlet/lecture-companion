@@ -4,11 +4,11 @@
 
 **실험 버전 · Codex / Claude Code · Aside / ego · macOS / Linux**
 
-[English](README.md) · [노트 예시](examples/containers/notes.md) · [기술 문서](docs/reference.md)
+[English](README.md) · [v0.10 다운로드](https://github.com/SundaePorkCutlet/lecture-companion/releases/tag/v0.10.0) · [노트 예시](examples/containers/notes.md) · [기술 문서](docs/reference.md)
 
 ## 시작하기
 
-1. 스킬 설치기로 이 저장소의 **`skills/lecture-companion` 폴더**를 설치합니다. 수집기와 실행 코드가 들어 있어 저장소 전체를 따로 유지할 필요가 없습니다.
+1. 스킬 설치기로 **[`skills/lecture-companion` 폴더](https://github.com/SundaePorkCutlet/lecture-companion/tree/main/skills/lecture-companion)**를 설치하거나, [독립 설치 ZIP](https://github.com/SundaePorkCutlet/lecture-companion/releases/download/v0.10.0/lecture-companion-0.10.0.zip)을 받아 아래 설치 명령을 실행합니다. 수집기와 실행 코드가 들어 있어 저장소 전체를 따로 유지할 필요가 없습니다.
 2. Aside 또는 ego에서 강의를 열고 자막을 켭니다. 브라우저 로그인·프로필·CLI 연결을 먼저 마칩니다. 지원되는 호스트의 내장 런타임을 사용하므로 Node/npm을 따로 설치하지 않습니다.
 3. Codex에 다음을 입력합니다. ego를 쓰면 문장의 Aside를 ego로 바꿉니다.
 
