@@ -14,7 +14,7 @@ function render(state,events,dir,questions){
   const capturedThrough=events.at(-1).id;
   const sourceIds=new Set(items.flatMap(item=>item.evidence));
   const evidence=events.filter(event=>event.id<=state.committedCursor||sourceIds.has(event.id));
-  const observations=events.filter(event=>uncertaintyTypes.has(event.type)||event.type==='seek'||event.type==='playback');
+  const observations=events.filter(event=>uncertaintyTypes.has(event.type)||event.type==='seek'||event.type==='playback'||event.type==='end');
   const lines=['# 함께 공부한 강의 기록','','강의 자막·선택 화면과 AI 설명을 구분한 기록입니다. 음성을 수집하지 않았으며 완전한 녹취나 학습자의 이해도를 증명하지 않습니다.',
     '',`수집한 이벤트: #${capturedThrough} · 반영한 이벤트: #${state.committedCursor} · 모드: ${state.mode} · Q&A 리비전: ${questions.revision}`,
     '','mediaTime=null/unknown은 강의 재생 시각을 확인하지 못했다는 뜻입니다. observedAt과 wallTime은 관찰/저장 시각이며 서로 다를 수 있습니다.',''];

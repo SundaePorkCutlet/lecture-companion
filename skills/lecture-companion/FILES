@@ -9,12 +9,15 @@ references/study-session.md
 scripts/install.sh
 scripts/lecture
 scripts/lecture.mjs
+scripts/runtime/assets/demo/lecture.webm
+scripts/runtime/assets/demo/player.html
 scripts/runtime/bin/lecture
 scripts/runtime/bin/lecture.mjs
 scripts/runtime/package.json
 scripts/runtime/src/aside-browser.mjs
 scripts/runtime/src/caption-source.mjs
 scripts/runtime/src/core.mjs
+scripts/runtime/src/demo.mjs
 scripts/runtime/src/ego-capture.mjs
 scripts/runtime/src/ego-image-worker.mjs
 scripts/runtime/src/host-runtime.mjs

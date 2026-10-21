@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Containers in 36 seconds · Lecture Companion sample</title>
+<style>
+  *{box-sizing:border-box}body{margin:0;background:#f5f4ef;color:#152b36;font:16px/1.5 system-ui,sans-serif}main{max-width:768px;margin:auto;padding:20px 24px}header p{margin:0;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#49605f}h1{font-size:26px;line-height:1.2;margin:8px 0 14px}#player{position:relative;background:#132238;border-radius:12px;overflow:hidden;box-shadow:0 8px 28px #152b3618}video{display:block;width:100%;aspect-ratio:16/9}#slide{position:absolute;left:32px;right:32px;top:36px;color:#f1f5fa;pointer-events:none}#step{font-size:12px;color:#9eddbb;letter-spacing:.1em}#heading{font-size:32px;line-height:1.15;max-width:560px;margin:18px 0}#detail{font:18px/1.5 ui-monospace,monospace;color:#c0cedb;max-width:590px}#caption{padding:16px 24px;min-height:80px;background:white;font-size:17px}footer{font-size:13px;color:#49605f;margin-top:12px}footer p{margin:5px 0}@media(max-width:550px){#slide{top:12px;left:16px;right:16px}#heading{font-size:23px;margin:8px 0}#detail{font-size:13px}#caption{font-size:15px}}
+</style>
+<main>
+  <header><p>Synthetic demo · silent · authored for this project</p><h1>Containers in 36 seconds</h1></header>
+  <section id="player" role="region" aria-label="video player">
+    <video id="video" controls muted playsinline preload="metadata" src="lecture.webm" aria-label="36-second silent sample"></video>
+    <div id="slide"><span id="step"></span><h2 id="heading"></h2><p id="detail"></p></div>
+    <div id="caption" aria-live="polite"></div>
+  </section>
+  <footer><p>Press Play after your study session is ready. Keep the complete player visible.</p><p>Ask your question chat: “Will docker cp change the image used for the next container?”</p><p>The sample contains no audio or third-party course material. Playback ends after 36 seconds.</p></footer>
+</main>
+<script>
+  const lessons=[
+    ['A container runs a process','container = process + isolation','A container runs a process with isolation. Docker is one set of tools for working with containers.'],
+    ['An image is the template','image → container','An image supplies the filesystem and configuration used when a container is created.'],
+    ['Docker manages the workflow','Dockerfile → image → container','Docker can build images and create and manage containers from those images.'],
+    ['docker cp changes one copy','docker cp file container:/path','Copying a file into an existing container can test a change. It does not rebuild the original image.'],
+    ['Record the build steps','COPY file /path','After testing, put the required file and build steps in the Dockerfile and build a new image.'],
+    ['Keep the question with the notes','lecture + explanation + Q&A','Ask why the test and build steps differ. Keep that explanation alongside the lecture notes for review.']
+  ];
+  const video=document.querySelector('#video');
+  function render(){const index=Math.min(5,Math.floor(video.currentTime/6)),[title,detail,caption]=lessons[index];document.querySelector('#step').textContent=`${String(index+1).padStart(2,'0')} / 06`;document.querySelector('#heading').textContent=title;document.querySelector('#detail').textContent=detail;document.querySelector('#caption').textContent=caption;}
+  video.addEventListener('timeupdate',render);video.addEventListener('seeked',render);render();
+</script>
+</html>

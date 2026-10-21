@@ -88,7 +88,7 @@ test('a failed publication restores the previous legacy registration',()=>{
 
 test('build and freshness checks refuse a runtime directory linked outside the skill',()=>{
   const x=fixture(),source=join(x.root,'publisher');mkdirSync(source);
-  for(const path of ['bin','src','vendor','scripts','skills','package.json','LICENSE'])cpSync(path,join(source,path),{recursive:true});
+  for(const path of ['bin','src','vendor','assets','scripts','skills','package.json','LICENSE'])cpSync(path,join(source,path),{recursive:true});
   const runtime=join(source,'skills/lecture-companion/scripts/runtime'),external=join(x.root,'external-runtime');renameSync(runtime,external);symlinkSync(external,runtime);
   for(const args of [['--check'],[]]){
     const result=spawnSync(process.execPath,[join(source,'scripts/package-skill.mjs'),...args],{encoding:'utf8'});
@@ -98,7 +98,7 @@ test('build and freshness checks refuse a runtime directory linked outside the s
 
 test('a build rejects generated leaf symlinks without changing their external targets',()=>{
   const x=fixture(),source=join(x.root,'publisher');mkdirSync(source);
-  for(const path of ['bin','src','vendor','scripts','skills','package.json','LICENSE'])cpSync(path,join(source,path),{recursive:true});
+  for(const path of ['bin','src','vendor','assets','scripts','skills','package.json','LICENSE'])cpSync(path,join(source,path),{recursive:true});
   for(const name of ['LICENSE','FILES','BUNDLE.sha256']){
     const target=join(source,'skills/lecture-companion',name),original=readFileSync(target),external=join(x.root,`external-${name}`);
     writeFileSync(external,'preserve external contents');rmSync(target);symlinkSync(external,target);

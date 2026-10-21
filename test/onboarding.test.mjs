@@ -95,6 +95,16 @@ test('check requires a saved player image and a live capture owner rather than o
   assert.equal(JSON.parse(run('check','--out',out).stdout).ready,false,'a dead capture process must block readiness even with fresh counters and a stale lock');
 });
 
+test('a stopped session explains player changes and offers export without suggesting a blind restart',()=>{
+  const {root,run}=environment(),out=join(root,'changed');mkdirSync(out);
+  const journal=new Journal(out);journal.append({type:'start'});journal.append({type:'end',reason:'player-changed'});
+  writeFileSync(join(out,'status.json'),JSON.stringify({state:'stopped',stopReason:'player-changed',completed:false,updatedAt:new Date().toISOString()}));
+  const result=JSON.parse(run('check','--out',out).stdout);
+  assert.equal(result.step,'capture-stopped');assert.equal(result.capture.stopReason,'player-changed');
+  assert.equal(result.capture.completed,false);assert.match(result.actions.join(' '),/export/i);
+  assert.match(result.actions.join(' '),/choose.*lecture/i);
+});
+
 test('a discovered on-screen iframe remains capturable when another iframe is offscreen',()=>{
   const {run,env,root}=environment();env.LECTURE_FIXTURE_TWO_PLAYERS='1';env.LECTURE_FIXTURE_OFFSCREEN='1';env.LECTURE_FIXTURE_IFRAMES='1';
   const setup=run('setup','--tab','lecture-1');assert.equal(JSON.parse(setup.stdout).step,'ready-to-start');

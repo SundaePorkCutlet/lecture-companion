@@ -36,7 +36,7 @@ function preflightTarget(name){
 for(const directory of [root,join(root,'skills'),skill,join(skill,'scripts')]){const info=lstatSync(directory);if(!info.isDirectory()||info.isSymbolicLink())throw new Error(`Bundle directory must be a regular directory: ${directory}`);}
 for(const file of ['SKILL.md','scripts/lecture','scripts/lecture.mjs','scripts/install.sh'])add(join(skill,file),file);
 for(const folder of ['agents','references'])for(const file of tree(join(skill,folder)))add(join(skill,folder,file),`${folder}/${file}`);
-for(const folder of ['bin','src','vendor'])for(const file of tree(join(root,folder)))add(join(root,folder,file),`scripts/runtime/${folder}/${file}`);
+for(const folder of ['bin','src','vendor','assets'])for(const file of tree(join(root,folder)))add(join(root,folder,file),`scripts/runtime/${folder}/${file}`);
 add(join(root,'LICENSE'),'LICENSE');
 files.set('scripts/runtime/package.json',Buffer.from(JSON.stringify({name:'lecture-companion-runtime',version:metadata.version,private:true,type:'module',engines:metadata.engines},null,2)+'\n'));
 for(const name of files.keys())if(!/^[a-zA-Z0-9_.\/-]+$/.test(name)||name.split('/').includes('..'))throw new Error(`Unsafe bundle path: ${name}`);

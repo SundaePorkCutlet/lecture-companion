@@ -27,6 +27,10 @@ The user chooses a lecture title; the agent handles tab IDs, selectors, output p
 
 The five-minute path assumes the host account and Aside profile/CLI are already connected. Browser downloads, account sign-in and unsupported host chat openers can add a manual step. Do not promise measured end-to-end speed or a ready chat from a prepared prompt alone.
 
+## Built-in sample
+
+When the user wants a sample, run `demo --serve` in the background and retain its process ID. Open its returned localhost URL in the selected Aside or ego browser using the supported browser tools. It is a project-authored, silent 36-second lecture with DOM subtitles. Use the normal role, lecture selection, capture and actual question-chat flow; the demo server itself creates neither a study session nor a chat. Press Play only after setup is ready, keeping the selected player fully visible. Finish and export as for a real lecture, then stop this demo server. Never substitute prepared example answers for the user's actual questions.
+
 ## Ego and manual setup
 
 1. Confirm the authorized lecture and intended playback speed from the conversation. For Aside, list existing tabs, explicitly select the authorized `targetId` and inspect the original page through its REPL. For ego, reuse one task space. Inspect the original player with a small snapshot; select the player iframe/container with a unique CSS selector. Do not open signed embedded URLs outside the original page or disable browser security.
@@ -49,7 +53,7 @@ If the user intentionally uses a single-chat fallback, the old question-mode flo
 
 Explain useful concepts proactively in the user's language at natural boundaries. Keep updates brief enough to read while the lecture runs. Check technical corrections against primary references. Distinguish observed lecture points, your explanation, and uncertain ASR spellings. Do not infer full coverage from silence or claim to have heard speech.
 
-On adapter error, user takeover, lost player or blocked browser action, stop and inspect; never blindly retry or switch to another tab. Event sources can finish normally on media-ended. Snapshot fallback cannot reliably distinguish a player transition from observation failure. Collector interruption records identify uncertainty. Do not call observer delay a proven missing sentence. `stop --out DIR` requests shutdown. Remove STOP only when resuming is intended; stale locks require verifying that the original process ended.
+On adapter error, user takeover, lost player or blocked browser action, stop and inspect; never blindly retry or switch to another tab. `stopped.reason=media-ended` means the end was observed. `player-changed` means the originally bound player/source changed: finish the current session and let the user choose the next lecture explicitly. It does not prove lecture completion, and the browser may still be playing. Other failures remain interruptions. Snapshot fallback binds the original player and checks it around reads/images, but cannot identify every internal cross-origin transition. Do not call observer delay a proven missing sentence. `stop --out DIR` requests shutdown. Remove STOP only when resuming is intended; stale locks require verifying that the original process ended.
 
 ## Finish
 

@@ -138,12 +138,14 @@ export function checkLecture(out){
   const status=JSON.parse(readFileSync(join(out,'status.json'),'utf8'));
   const questions=existsSync(join(out,'questions.json'))?JSON.parse(readFileSync(join(out,'questions.json'),'utf8')):null;
   const chat=questions?.chat??null;
-  let ownerAlive=false,captionAvailable=false,frameAvailable=false,ended=false;
+  let ownerAlive=false,captionAvailable=false,frameAvailable=false,ended=false,lastEvent=null;
   try{
-    const {capturePid}=JSON.parse(readFileSync(join(out,'manifest.json'),'utf8'));
-    if(Number.isInteger(capturePid)&&capturePid>0){process.kill(capturePid,0);ownerAlive=true;}
+    try{
+      const {capturePid}=JSON.parse(readFileSync(join(out,'manifest.json'),'utf8'));
+      if(Number.isInteger(capturePid)&&capturePid>0){process.kill(capturePid,0);ownerAlive=true;}
+    }catch{/* Completed/manual captures need not have a live owner manifest. */}
     const events=new Journal(out,{readOnly:true}).read();
-    ended=['end','interruption'].includes(events.at(-1)?.type);
+    lastEvent=events.at(-1);ended=['end','interruption'].includes(lastEvent?.type);
     captionAvailable=events.some(e=>e.type==='caption'&&typeof e.text==='string'&&e.text.trim());
     frameAvailable=events.some(e=>{
       if(e.type!=='frame')return false;
@@ -156,7 +158,12 @@ export function checkLecture(out){
   const evidence=captionAvailable&&frameAvailable&&status.captionEvents>0&&status.framesSaved>0;
   const ready=active&&evidence&&chat?.status==='bound';
   const step=!active?'capture-stopped':!evidence?'waiting-for-evidence':chat?.status!=='bound'?'open-question-chat':'ready';
-  return {step,ready,out,capture:{state:status.state,ownerAlive,captionAvailable,frameAvailable,captionEvents:status.captionEvents,framesSaved:status.framesSaved,adapter:status.adapter,updatedAt:status.updatedAt},
+  const stopReason=status.stopReason??(lastEvent?.type==='end'?lastEvent.reason:null);
+  const stoppedActions=lastEvent?.type==='end'?
+    [...(stopReason==='player-changed'?['The selected player changed; this does not prove lecture completion. Choose the intended lecture explicitly for a fresh session.']:[]),
+      'Drain remaining study batches, then export saved notes and Q&A with study export. The question chat can still use this session.']:
+    ['Capture is stopped or its status is stale. Inspect status before starting another session. Saved evidence and Q&A can still be exported.'];
+  return {step,ready,out,capture:{state:status.state,stopReason,completed:lastEvent?.type==='end'&&lastEvent.reason==='media-ended',ownerAlive,captionAvailable,frameAvailable,captionEvents:status.captionEvents,framesSaved:status.framesSaved,adapter:status.adapter,updatedAt:status.updatedAt},
     questionChat:chat?{host:chat.host,status:chat.status,threadId:chat.threadId,title:chat.title}:null,
-    actions:ready?[]:step==='waiting-for-evidence'?['Enable visible subtitles and play the intended lecture; inspect capture status if evidence stays empty.']:step==='open-question-chat'?['Open the prepared question prompt using the native host, bind its real session ID with study chat-bind, then check again.']:['Capture is stopped or its status is stale. Inspect status before starting another session.']};
+    actions:ready?[]:step==='waiting-for-evidence'?['Enable visible subtitles and play the intended lecture; inspect capture status if evidence stays empty.']:step==='open-question-chat'?['Open the prepared question prompt using the native host, bind its real session ID with study chat-bind, then check again.']:stoppedActions};
 }

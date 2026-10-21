@@ -2,6 +2,7 @@
 import {createInterface} from 'node:readline';
 import {createContext,runInContext} from 'node:vm';
 import {PNG} from '../../vendor/pngjs/lib/png.js';
+import {webcrypto} from 'node:crypto';
 const image=new PNG({width:800,height:600});
 for(let y=0;y<600;y++)for(let x=0;x<800;x++){const i=(y*800+x)*4;image.data[i]=210;image.data[i+3]=255;if(x>=16&&x<136&&y>=24&&y<124){image.data[i]=0;image.data[i+1]=180;}}
 const png=PNG.sync.write(image),attached=new Map();
@@ -17,10 +18,10 @@ const page={evaluate:async(fn,arg)=>fn(arg),screenshot:async({clip})=>{
 const tabs=[{targetId:'lecture-1',title:'Synthetic lecture',url:'http://localhost/lecture?jwt=PRIVATE',active:false},{targetId:'private-2',title:'Other tab',url:'http://localhost/private',active:true}];
 const caption={id:'caption',contains:()=>false};
 function player(id,y){
-  const selected={id,tagName:'SECTION',getAttribute:name=>name==='aria-label'?'video player':null,
+  const selected={id,tagName:'SECTION',isConnected:true,addEventListener(){},removeEventListener(){},getAttribute:name=>name==='aria-label'?'video player':null,
     getBoundingClientRect:()=>({x:16,y:y+(context.fixtureOffset??0),width:120,height:100,right:136,bottom:y+100+(context.fixtureOffset??0)}),
     matches:()=>false,querySelectorAll:selector=>selector==='video'?[video]:[caption]};
-  const video={id:`video-${id}`,tagName:'VIDEO',getBoundingClientRect:selected.getBoundingClientRect,closest:()=>selected,textTracks:[]};
+  const video={id:`video-${id}`,tagName:'VIDEO',isConnected:true,addEventListener(){},removeEventListener(){},getBoundingClientRect:selected.getBoundingClientRect,closest:()=>selected,textTracks:[]};
   return {selected,video};
 }
 const first=player('player',24),second=player('player2',process.env.LECTURE_FIXTURE_OFFSCREEN?900:200);
@@ -29,7 +30,7 @@ if(process.env.LECTURE_FIXTURE_IFRAMES)for(const item of all){item.selected.tagN
 const resource={id:'resource',tagName:'IFRAME',getAttribute:()=>null,getBoundingClientRect:first.selected.getBoundingClientRect,
   contentDocument:{matches:()=>false,querySelectorAll:()=>[]}};
 let lines=[],busy=false;
-const context=createContext({Buffer,setTimeout,console:{log:s=>lines.push(String(s))},
+const context=createContext({Buffer,setTimeout,clearTimeout,crypto:webcrypto,console:{log:s=>lines.push(String(s))},
   innerWidth:800,innerHeight:600,devicePixelRatio:1,CSS:{escape:value=>value},getComputedStyle:()=>({visibility:'visible',display:'block'}),
   document:{querySelectorAll:selector=>process.env.LECTURE_FIXTURE_RESOURCE_FRAME?(['iframe','video,iframe','#resource'].includes(selector)?[resource]:[]):process.env.LECTURE_FIXTURE_IFRAMES&&['iframe','video,iframe'].includes(selector)?all.map(p=>p.selected):selector==='video,iframe'?all.map(p=>p.video):all.filter(p=>selector===`#${p.selected.id}`).map(p=>p.selected)},
   listBrowserTabs:async()=>tabs,
@@ -37,6 +38,7 @@ const context=createContext({Buffer,setTimeout,console:{log:s=>lines.push(String
   getTabByTargetId:id=>{if(!attached.has(id))throw new Error('not attached');return page;},
   snapshot:async(p,options)=>{if(options.selector!=='#player')throw new Error('unscoped snapshot');return {tree:'- region "video player" [ref=e1]:\n  - text: "Pod is a deployment unit"\n  - button "Pause":\n    - text: control label\n  - slider "progress"',diff:''};}
 });
+context.window=context;
 const send=x=>{const data=JSON.stringify(x)+'\n';process.stdout.write(data.slice(0,9));process.stdout.write(data.slice(9));};
 createInterface({input:process.stdin}).on('line',async line=>{
   const msg=JSON.parse(line);if(!msg.id)return;

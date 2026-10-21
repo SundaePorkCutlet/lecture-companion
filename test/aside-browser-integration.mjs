@@ -58,7 +58,8 @@ try{
   for(const scroll of [0,80]){
     await cropPage.page.evaluate(y=>{window.scrollTo(0,y);return scrollY;},scroll);
     const dir=join(root,`crop-${scroll}`);
-    const cropped=await runCapture({page:cropPage.page,out:dir,browser:'aside',selector:'#player',captionMode:'snapshot',durationSec:0.8,pollMs:200,frameMs:400});
+    const cropped=await runCapture({page:cropPage.page,out:dir,browser:'aside',selector:'#player',captionMode:'snapshot',durationSec:10,pollMs:200,frameMs:400,batchMs:100,
+      onNotice:n=>{if(n.type==='batch-ready'&&n.frames>0)writeFileSync(join(dir,'STOP'),'Observed cropped fixture frame\n');}});
     const event=new Journal(dir,{readOnly:true}).read().find(e=>e.type==='frame');assert.ok(event);
     const img=PNG.sync.read(readFileSync(join(dir,event.file)));
     for(const [x,y]of [[0,0],[img.width-1,0],[0,img.height-1],[img.width-1,img.height-1]]){

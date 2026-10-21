@@ -16,7 +16,8 @@ export async function runCapture({page,out,durationSec=1800,pollMs=500,frameMs=2
     polls:0,captionEvents:0,frameSamples:0,framesSaved:0,maxPollGapMs:0,maxScreenshotMs:0,maxImageProcessingMs:0,
     captionEventsDropped:0,rawSnapshotBytes:0,modelCalls:0,tokenUsage:null,timestampMode:'source-dependent',imageProcessor:'external-node-process',
     limitations:['No audio captured. No completeness guarantee.','Bottom 20% masked only for comparison; changes confined there may be filtered.']};
-  let journal,source,processor,visualTask=Promise.resolve(),fatal=null,lastObserved=started,lastNotice=started,ended=false,lastMediaTime=null;
+  let journal,source,processor,visualTask=Promise.resolve(),fatal=null,lastObserved=started,lastNotice=started,ended=false,boundary=null,lastMediaTime=null;
+  const changed=reason=>{boundary??=reason;abort.abort();};
   const measureGap=now=>{
     const gap=now-lastObserved;metrics.maxPollGapMs=Math.max(metrics.maxPollGapMs,gap);
     if(gap>Math.max(2000,pollMs*4))journal?.append({type:'observation-gap',durationMs:gap,reason:'Caption observation/read delayed; inspect source mode and overflow for coverage uncertainty.',mediaTime:null});
@@ -29,6 +30,8 @@ export async function runCapture({page,out,durationSec=1800,pollMs=500,frameMs=2
   const wait=ms=>delay(Math.max(1,ms),undefined,{signal:abort.signal}).catch(error=>{if(error.name!=='AbortError')throw error;});
   const consume=async packet=>{
     if(fatal)throw fatal;
+    if(!packet.healthy&&['media-source-changed','frame-document-changed','player-changed'].includes(packet.failure))changed(packet.failure);
+    if(boundary&&!source.kind.startsWith('event:'))return;
     lastMediaTime=packet.state?.mediaTime??null;
     if((packet.dropped??0)>metrics.captionEventsDropped){
       journal.append({type:'caption-overflow',dropped:packet.dropped-metrics.captionEventsDropped,mediaTime:lastMediaTime});metrics.captionEventsDropped=packet.dropped;
@@ -41,7 +44,7 @@ export async function runCapture({page,out,durationSec=1800,pollMs=500,frameMs=2
         else if(caption?.type==='seek')journal.append(caption);
       }else{journal.append(event);if(event.type==='media-ended')ended=true;}
     }
-    if(!packet.healthy&&!ended)throw new Error('Caption source disconnected');
+    if(!packet.healthy&&!ended&&!boundary)throw new Error('Caption source disconnected');
     if(fatal)throw fatal;
     const through=packet.events.at(-1)?.seq;if(through!==undefined)await source.ack(through);
     if(fatal)throw fatal;
@@ -55,8 +58,12 @@ export async function runCapture({page,out,durationSec=1800,pollMs=500,frameMs=2
     processor=new VisualWorker({nodeExecutable:imageNode,runtime:imageRuntime});status();onNotice({type:'started',out,adapter:source.kind,fallbackReason:source.fallbackReason});
     visualTask=(async()=>{
       while(!abort.signal.aborted){
+        await source.assertCurrent?.();
+        if(abort.signal.aborted)return;
         const begin=Date.now(),frame=await capturePlayerFrame(page,selector,abort.signal);
         if(!frame||abort.signal.aborted)return;
+        await source.assertCurrent?.();
+        if(abort.signal.aborted)return;
         metrics.maxScreenshotMs=Math.max(metrics.maxScreenshotMs,Date.now()-begin);metrics.frameSamples++;
         const result=await processor.process(frame);
         metrics.maxImageProcessingMs=Math.max(metrics.maxImageProcessingMs,result.processingMs);
@@ -67,9 +74,11 @@ export async function runCapture({page,out,durationSec=1800,pollMs=500,frameMs=2
         }
         await wait(frameMs-(Date.now()-begin));
       }
-    })().catch(error=>{fatal=error;abort.abort();});
-    while(Date.now()-started<durationSec*1000&&!existsSync(join(out,'STOP'))&&!fatal&&!ended){
-      const now=Date.now(),packet=await source.read();measureGap(Date.now());metrics.polls++;
+    })().catch(error=>{if(error.code==='PLAYER_CHANGED')changed('player-changed');else{fatal=error;abort.abort();}});
+    while(Date.now()-started<durationSec*1000&&!existsSync(join(out,'STOP'))&&!fatal&&!ended&&!boundary){
+      const now=Date.now();let packet;
+      try{packet=await source.read();}catch(error){if(error.code==='PLAYER_CHANGED'){changed('player-changed');break;}throw error;}
+      measureGap(Date.now());metrics.polls++;
       metrics.rawSnapshotBytes+=packet.rawBytes??0;await consume(packet);
       status();
       if(now-lastNotice>=batchMs){lastNotice=now;onNotice({type:'batch-ready',lastEventId:journal.lastId,captions:metrics.captionEvents,frames:metrics.framesSaved});}
@@ -82,16 +91,20 @@ export async function runCapture({page,out,durationSec=1800,pollMs=500,frameMs=2
       while(packet.hasMore){packet=await source.read();await consume(packet);}
     }
     if(fatal)throw fatal;
-    if(ended){try{await source.close();}catch{/* End observed; a reload may already have removed the probe. */}}
+    if(ended||boundary){try{await source.close();}catch{/* A confirmed boundary may already have removed the probe. */}}
     else await source.close();
     await visualTask;if(fatal)throw fatal;await processor.close();
     measureGap(Date.now());
-    metrics.state='stopped';journal.append({type:'end',reason:ended?'media-ended':existsSync(join(out,'STOP'))?'stop-request':'duration-limit',mediaTime:lastMediaTime});status();
-    onNotice({type:'stopped',lastEventId:journal.lastId});return metrics;
+    metrics.state='stopped';metrics.stopReason=ended?'media-ended':boundary?'player-changed':existsSync(join(out,'STOP'))?'stop-request':'duration-limit';
+    metrics.completed=ended;
+    const detail=boundary&&!ended?'The selected player changed. This does not prove lecture completion; choose the next lecture explicitly.':null;
+    journal.append({type:'end',reason:metrics.stopReason,...(detail?{detail,boundary}:{}),mediaTime:lastMediaTime});status();
+    onNotice({type:'stopped',lastEventId:journal.lastId,reason:metrics.stopReason,completed:metrics.completed,
+      actions:['Drain remaining study batches and export saved notes and Q&A.',...(boundary&&!ended?['Choose the intended lecture before starting a fresh session.']:[])]});return metrics;
   }catch{
     abort.abort();await visualTask;await processor?.close();
     // No browser calls after observation/control loss; the event probe lease expires locally.
-    measureGap(Date.now());metrics.state='error';
+    measureGap(Date.now());metrics.state='error';metrics.stopReason='observation-error';metrics.completed=false;
     journal?.append({type:'interruption',reason:'Browser, caption source, or image worker failed. Capture stopped; inspect source before restarting.',mediaTime:null});status();
     throw new Error('Capture stopped: browser, caption source, or image worker failed. Inspect the authorized player before restarting.');
   }finally{unlinkSync(lock);}

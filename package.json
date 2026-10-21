@@ -1,6 +1,6 @@
 {
   "name": "lecture-companion",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "private": true,
   "type": "module",
   "description": "Local lecture evidence capture and bounded batches for an AI study partner",
@@ -19,6 +19,7 @@
     "test:browser": "node test/browser-integration.mjs",
     "test:aside": "node test/aside-browser-integration.mjs",
     "test:onboarding:browser": "node test/onboarding-browser-integration.mjs",
+    "test:release:browser": "node test/release-browser-integration.mjs",
     "demo": "node bin/lecture.mjs demo"
   }
 }

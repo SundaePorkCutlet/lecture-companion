@@ -9,10 +9,10 @@ import {runStudyCommand} from '../src/study-cli.mjs';
 import {hostRuntime,runtimeDoctor} from '../src/host-runtime.mjs';
 
 try {
-  const {values,positionals}=parseArgs({args:process.argv.slice(2),allowPositionals:true,options:Object.fromEntries(['out','space','page','duration','after','bytes','selector','title','caption-mode','caption-selector','mode','file','receipt','event','offset','notes','json','host','worker-thread','item','query','retry-setup','browser','tab','account','profile'].map(k=>[k,{type:'string'}]))});
+  const {values,positionals}=parseArgs({args:process.argv.slice(2),allowPositionals:true,options:{serve:{type:'boolean'},...Object.fromEntries(['out','space','page','duration','after','bytes','selector','title','caption-mode','caption-selector','mode','file','receipt','event','offset','notes','json','host','worker-thread','item','query','retry-setup','browser','tab','account','profile'].map(k=>[k,{type:'string'}]))}});
   const command=positionals[0]??'help',out=resolve(values.out??'sessions/demo');
   if(command==='help'){
-    console.log(`Lecture Companion 0.9.0\nCommands: setup, start, check, doctor, tabs, capture, batch, status, stop, export, demo, study\nFirst run: setup -> choose lecture title -> setup --tab ID -> start --tab ID (background)\nStart auto-discovers one player, initializes study, emits question-chat-required; native host opens/binds chat.\nCheck: check --out SESSION; ready requires active capture, caption, cropped image and bound real chat.\nAside: tabs --browser aside [--account u0 --profile ID]\nAside capture: --browser aside --tab TARGET_ID --selector CSS --out ABSOLUTE_DIR\nEgo capture (default): --space ID --page p1 --out ABSOLUTE_DIR\nOptional: --duration 1800 --selector 'iframe[src*=kollus.com]'\nCaptions: --caption-mode auto|event|snapshot --caption-selector CSS\nAuto prefers TextTrack/DOM events; inaccessible iframe uses explicit snapshot fallback.\nBatch: --after 0 --bytes 12000 (UTF-8 bytes, not token count)\nStudy: init|mode|next|evidence|commit|note|status|context|qa|chat|chat-bind|export --out SESSION\nStudy mode: --mode follow|question|catch-up; question requires --file JSON\nStudy commit/note: --file JSON. Evidence: --receipt ID --event N --offset N\nStudy context: --event N or --item KEY or --query TEXT --offset N (read-only)\nStudy chat: --host codex|claude-code --title TITLE; prepare, then native open + chat-bind --file JSON; confirmed failure: --retry-setup ID\nStudy qa: --file JSON (independent question/answer snapshot)\nStudy next/evidence/context: --bytes 12000 (minimum 2048). Export: --notes PATH --json PATH\nCapture observes only; start/pause/speed remain in the player.\nStop: create STOP via the stop command; remove STOP before resuming.`);
+    console.log(`Lecture Companion 0.10.0\nCommands: setup, start, check, doctor, tabs, capture, batch, status, stop, export, demo, study\nTry a sample: demo --serve (local synthetic lecture; stop this server when finished)\nFirst run: setup -> choose lecture title -> setup --tab ID -> start --tab ID (background)\nStart auto-discovers one player, initializes study, emits question-chat-required; native host opens/binds chat.\nCheck: check --out SESSION; ready requires active capture, caption, cropped image and bound real chat.\nAside: tabs --browser aside [--account u0 --profile ID]\nAside capture: --browser aside --tab TARGET_ID --selector CSS --out ABSOLUTE_DIR\nEgo capture (default): --space ID --page p1 --out ABSOLUTE_DIR\nOptional: --duration 1800 --selector 'iframe[src*=kollus.com]'\nCaptions: --caption-mode auto|event|snapshot --caption-selector CSS\nAuto prefers TextTrack/DOM events; inaccessible iframe uses explicit snapshot fallback.\nBatch: --after 0 --bytes 12000 (UTF-8 bytes, not token count)\nStudy: init|mode|next|evidence|commit|note|status|context|qa|chat|chat-bind|export --out SESSION\nStudy mode: --mode follow|question|catch-up; question requires --file JSON\nStudy commit/note: --file JSON. Evidence: --receipt ID --event N --offset N\nStudy context: --event N or --item KEY or --query TEXT --offset N (read-only)\nStudy chat: --host codex|claude-code --title TITLE; prepare, then native open + chat-bind --file JSON; confirmed failure: --retry-setup ID\nStudy qa: --file JSON (independent question/answer snapshot)\nStudy next/evidence/context: --bytes 12000 (minimum 2048). Export: --notes PATH --json PATH\nCapture observes only; start/pause/speed remain in the player.\nStop: create STOP via the stop command; remove STOP before resuming.`);
   }else if(command==='setup'){
     const {setupLecture}=await import('../src/onboarding.mjs');
     const result=await setupLecture(values);console.log(JSON.stringify(result));
@@ -59,12 +59,19 @@ try {
     child.on('exit',code=>{process.exitCode=code??1;});
     }
   }else if(command==='demo'){
+    if(values.serve){
+      const {serveDemo}=await import('../src/demo.mjs'),demo=await serveDemo();
+      console.log(JSON.stringify({type:'demo-ready',url:demo.url,source:'synthetic, silent, self-authored sample',actions:['Open this URL in the selected Aside or ego browser.','Start a normal study session and question chat, then press Play.','Stop this local server when finished.']}));
+      const close=()=>demo.close().catch(()=>{process.exitCode=1;});
+      process.once('SIGINT',close);process.once('SIGTERM',close);
+    }else{
     const journal=new Journal(out);
     if(journal.lastId)throw new Error('Demo requires an empty output directory');
     writeFileSync(join(out,'manifest.json'),JSON.stringify({title:values.title??'DEMO — synthetic lecture',source:'synthetic fixture, not a recorded lecture'},null,2));
     journal.append({type:'start',mediaTime:0});
     for(let i=0;i<20;i++)journal.append({type:'caption',text:`DEMO ${i+1}: Pod is a unit of deployment; this is synthetic evidence.`,mediaTime:i*3});
     journal.append({type:'end',mediaTime:60});console.log(JSON.stringify({out,events:journal.lastId}));
+    }
   }else if(command==='batch'){
     console.log(JSON.stringify(new Journal(out,{readOnly:true}).batch({after:Number(values.after??0),maxBytes:Number(values.bytes??12000)})));
   }else if(command==='status'){

@@ -4,6 +4,7 @@ import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {runInNewContext} from 'node:vm';
 import {installCaptionProbe,captionProbeCommand} from '../src/caption-source.mjs';
+import * as sources from '../src/caption-source.mjs';
 
 function fixture({iframe=false,tracks=[]}={}){
   class TrackList extends EventTarget{*[Symbol.iterator](){yield* tracks;}}
@@ -11,7 +12,7 @@ function fixture({iframe=false,tracks=[]}={}){
   const view={MutationObserver:Observer,getComputedStyle:()=>({visibility:'visible'})};
   const caption={innerText:'visible subtitle',getClientRects:()=>[{}]};
   const doc={defaultView:view,querySelectorAll:s=>s==='video'?[video]:s==='#caption'?[caption]:[]};
-  const video=Object.assign(new EventTarget(),{ownerDocument:doc,isConnected:true,textTracks:new TrackList(),currentTime:1.25,paused:true,playbackRate:1,ended:false,duration:20});
+  const video=Object.assign(new EventTarget(),{ownerDocument:doc,isConnected:true,textTracks:new TrackList(),currentSrc:'original.webm',currentTime:1.25,paused:true,playbackRate:1,ended:false,duration:20});
   const selected=iframe?{tagName:'IFRAME',isConnected:true,contentDocument:doc}:{tagName:'SECTION',isConnected:true,matches:()=>false,querySelectorAll:doc.querySelectorAll};
   const window={};const context={window,document:{querySelectorAll:()=>[selected]},crypto:{randomUUID:()=> 'fixture-id'},setTimeout,clearTimeout};
   const install=args=>runInNewContext(`(${installCaptionProbe.toString()})(${JSON.stringify(args)})`,context);
@@ -51,4 +52,41 @@ test('play, pause and playback rate changes retain their observed state in the a
     f.command({token:p.token,action:'ack',through:packet.events.at(-1).seq});
     assert.equal(f.command({token:p.token,action:'read'}).events.length,0);
   }finally{f.command({token:p.token,action:'close'});}
+});
+
+test('snapshot fallback detects a changed iframe without returning its signed URL',()=>{
+  const selected=Object.assign(new EventTarget(),{tagName:'IFRAME',isConnected:true,src:'https://course.test/a?jwt=PRIVATE',contentDocument:null});
+  const window={},context={window,document:{querySelectorAll:()=>[selected]},crypto:{randomUUID:()=> 'snapshot-id'},setTimeout,clearTimeout};
+  const p=runInNewContext(`(${sources.installSnapshotProbe?.toString()})({selector:'#player'})`,context);
+  const command=action=>runInNewContext(`(${sources.snapshotProbeCommand?.toString()})(${JSON.stringify({token:p.token,action})})`,context);
+  try{
+    assert.equal(command('read').healthy,true);
+    selected.src='https://course.test/b?jwt=PRIVATE';
+    const packet=command('read');assert.equal(packet.healthy,false);assert.equal(packet.failure,'player-changed');
+    assert.ok(!JSON.stringify(packet).includes('PRIVATE'));
+  }finally{command('close');}
+});
+
+test('an emptied media element freezes captions before the next lecture can enter the queue',()=>{
+  const f=fixture(),p=f.install({selector:'#player',captionSelector:'#caption'});
+  try{
+    f.video.dispatchEvent(new Event('emptied'));f.caption.innerText='caption from NEXT lecture';
+    f.video.dispatchEvent(new Event('loadedmetadata'));
+    const packet=f.command({token:p.token,action:'read'});
+    assert.equal(packet.failure,'media-source-changed');
+    assert.ok(!packet.events.some(e=>e.text?.includes('NEXT')));
+  }finally{f.command({token:p.token,action:'close'});}
+});
+
+test('snapshot binding accepts initial media loading and then detects replacement of that same video',()=>{
+  const video=Object.assign(new EventTarget(),{tagName:'VIDEO',isConnected:true,currentSrc:'',matches:()=>true});
+  const window={},context={window,document:{querySelectorAll:()=>[video]},crypto:{randomUUID:()=> 'loading-id'},setTimeout,clearTimeout};
+  const p=runInNewContext(`(${sources.installSnapshotProbe.toString()})({selector:'video'})`,context);
+  const command=action=>runInNewContext(`(${sources.snapshotProbeCommand.toString()})(${JSON.stringify({token:p.token,action})})`,context);
+  try{
+    assert.equal(command('read').healthy,true);
+    video.dispatchEvent(new Event('emptied'));video.currentSrc='original.webm';
+    assert.equal(command('read').healthy,true,'the original resource loading is not a lecture transition');
+    video.currentSrc='next.webm';assert.equal(command('read').failure,'player-changed');
+  }finally{command('close');}
 });
