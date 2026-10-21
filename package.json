@@ -1,6 +1,6 @@
 {
   "name": "lecture-companion",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "private": true,
   "type": "module",
   "description": "Local lecture evidence capture and bounded batches for an AI study partner",

@@ -4,6 +4,7 @@ import {join,delimiter,isAbsolute} from 'node:path';
 import {randomUUID} from 'node:crypto';
 import {parseAsideSnapshot} from './snapshot.mjs';
 import {measurePlayer} from './player-frame.mjs';
+import {checkText,RESOURCE_LIMITS} from './resource-limits.mjs';
 
 const executable=path=>{try{accessSync(path,constants.X_OK);return true;}catch{return false;}};
 export function findAsideCommand(env=process.env){
@@ -106,9 +107,10 @@ export async function connectAsidePage({targetId,...options}){
     const ref=`getTabByTargetId(${JSON.stringify(targetId)})`;
     const page={snapshotKind:'aside-accessibility-poll',captionLeaseMs:60000,
       evaluate:(fn,arg)=>client.json(`${ref}.evaluate((${fn.toString()}),${JSON.stringify(arg)??'undefined'})`),
-      async readCaptionSnapshot(selector){
+      async readCaptionSnapshot(selector,maxBytes=RESOURCE_LIMITS.snapshotBytes){
         await this.evaluate(selector=>{if(document.querySelectorAll(selector).length!==1)throw new Error('Choose exactly one player element');return true;},selector);
         const snapshot=await client.json(`snapshot(${ref},{selector:${JSON.stringify(selector)}})`);
+        checkText(snapshot.tree,Math.min(maxBytes,RESOURCE_LIMITS.snapshotBytes),'snapshot-bytes');
         return {state:parseAsideSnapshot(snapshot.tree),rawBytes:Buffer.byteLength(snapshot.tree)};
       },
       async capturePlayerScreenshot(clip,viewport,selector){

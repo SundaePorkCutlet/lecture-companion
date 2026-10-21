@@ -1,15 +1,19 @@
 import {parseSnapshot} from './snapshot.mjs';
+import {resourceLimits,ResourceLimitError,RESOURCE_LIMITS,checkText} from './resource-limits.mjs';
 
 function requireCurrent(packet){
   if(packet.healthy)return;
+  if(packet.failure==='resource-limit')throw new ResourceLimitError('browser-caption-bytes');
   const error=new Error('Selected player source is no longer available');
   if(['player-changed','media-source-changed','frame-document-changed'].includes(packet.failure))error.code='PLAYER_CHANGED';
   throw error;
 }
 
 // Serialized into the selected page. Keep this function self-contained.
-export function installCaptionProbe({selector,captionSelector=null,capacity=2048,leaseMs=5000}){
+export function installCaptionProbe({selector,captionSelector=null,capacity=2048,leaseMs=5000,
+  maxCaptionBytes=65536,maxEventBytes=131072,maxQueueBytes=524288,maxPacketBytes=262144}){
   if(!Number.isInteger(capacity)||capacity<1||capacity>10000||leaseMs<1000||leaseMs>60000)throw new Error('Invalid caption probe limits');
+  for(const [value,max] of [[maxCaptionBytes,65536],[maxEventBytes,131072],[maxQueueBytes,524288],[maxPacketBytes,262144]])if(!Number.isSafeInteger(value)||value<1||value>max)throw new Error('Invalid caption byte limits');
   const key='__lectureCompanionProbeV2';
   if(window[key])throw new Error('A caption collector is already installed on this page');
   const nodes=document.querySelectorAll(selector);
@@ -29,12 +33,16 @@ export function installCaptionProbe({selector,captionSelector=null,capacity=2048
   };
   if(!chosenTrack()&&!captionSelector)return {available:false,reason:'no-enabled-text-track-or-caption-selector'};
   if(captionSelector&&root.querySelectorAll(captionSelector).length!==1)return {available:false,reason:'caption-element-not-found-or-ambiguous'};
-  const token=crypto.randomUUID(),queue=[],removers=[];let seq=0,dropped=0,disposed=false,frozen=false,timer,lastText,lastTime=null,failure=null;
+  const token=crypto.randomUUID(),queue=[],sizes=[],removers=[],encoder=new TextEncoder();let queuedBytes=0,seq=0,dropped=0,disposed=false,frozen=false,timer,lastText,lastTime=null,failure=null;
+  const limit=()=>{failure='resource-limit';frozen=true;};
+  const shift=()=>{queuedBytes-=sizes.shift();return queue.shift();};
   const media=()=>({mediaTime:Number.isFinite(video.currentTime)?video.currentTime:null,paused:video.paused,playbackRate:Number.isFinite(video.playbackRate)?video.playbackRate:null,ended:video.ended,duration:Number.isFinite(video.duration)?video.duration:null});
   const push=event=>{
     if(disposed||frozen)return;
-    if(queue.length===capacity){queue.shift();dropped++;}
-    queue.push({...event,seq:++seq,observedAt:new Date().toISOString()});
+    const row={...event,seq:seq+1,observedAt:new Date().toISOString()},bytes=encoder.encode(JSON.stringify(row)).length;
+    if(bytes>maxEventBytes||bytes+2>maxPacketBytes||bytes>maxQueueBytes){limit();return;}
+    while(queue.length&&(queue.length===capacity||queuedBytes+bytes>maxQueueBytes)){shift();dropped++;}
+    queue.push(row);sizes.push(bytes);queuedBytes+=bytes;seq++;
   };
   const source=()=>chosenTrack()?'text-track':'dom-mutation';
   const checkMedia=()=>{
@@ -52,6 +60,7 @@ export function installCaptionProbe({selector,captionSelector=null,capacity=2048
       const node=captions[0];
       if(node&&node.getClientRects().length&&view.getComputedStyle(node).visibility!=='hidden')text=node.innerText??node.textContent??'';
     }
+    if(text.length>maxCaptionBytes||encoder.encode(text).length>maxCaptionBytes){limit();return;}
     text=text.replace(/\s+/g,' ').trim();
     if(text!==lastText){push({type:'caption',text,mediaTime:media().mediaTime,source:source()});lastText=text;}
     lastTime=media().mediaTime;
@@ -72,21 +81,29 @@ export function installCaptionProbe({selector,captionSelector=null,capacity=2048
   if(captionSelector)observer.observe(root,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['class','style','hidden']});
   const close=()=>{
     if(disposed)return;disposed=true;clearTimeout(timer);observer.disconnect();removers.forEach(remove=>remove());queue.length=0;
-    if(window[key]?.token===token)delete window[key];
+    sizes.length=0;queuedBytes=0;if(window[key]?.token===token)delete window[key];
   };
   const renew=()=>{clearTimeout(timer);timer=setTimeout(close,leaseMs);};
   const freeze=()=>{if(disposed||frozen)return;observe();frozen=true;observer.disconnect();removers.forEach(remove=>remove());renew();};
-  window[key]={token,read(){
+  const health=()=>{
     renew();checkMedia();
     if(selected.tagName==='IFRAME'){
       try{if(selected.contentDocument!==root)failure='frame-document-changed';}catch{failure='frame-document-changed';}
     }
     if(!chosenTrack()&&!captionSelector)failure??='caption-source-unavailable';
     if(!selected.isConnected||!video.isConnected)failure??='player-changed';
-    return {events:queue.slice(0,256),hasMore:queue.length>256,dropped,healthy:!failure&&selected.isConnected&&video.isConnected,failure,source:source(),state:media()};
+    return {healthy:!failure&&selected.isConnected&&video.isConnected,failure,source:source(),state:media()};
+  };
+  window[key]={token,health,read(){
+    const state=health(),events=[];let bytes=2;
+    for(let i=0;i<queue.length&&i<256;i++){
+      if(bytes+sizes[i]+(i?1:0)>maxPacketBytes)break;
+      bytes+=sizes[i]+(i?1:0);events.push(queue[i]);
+    }
+    return {...state,events,hasMore:queue.length>events.length,dropped};
   },ack(through){
     if(!Number.isInteger(through)||through<0||through>seq)throw new Error('Invalid caption acknowledgment');
-    while(queue.length&&queue[0].seq<=through)queue.shift();renew();
+    while(queue.length&&queue[0].seq<=through)shift();renew();
   },stop(){freeze();return this.read();},close};
   renew();attachTracks();return {available:true,token,source:source()};
 }
@@ -95,6 +112,7 @@ export function captionProbeCommand({token,action,through}){
   const probe=window.__lectureCompanionProbeV2;
   if(!probe||probe.token!==token)throw new Error('Caption source disconnected or lease expired');
   if(action==='read')return probe.read();
+  if(action==='health')return probe.health();
   if(action==='stop')return probe.stop();
   if(action==='ack'){probe.ack(through);return true;}
   if(action==='close'){probe.close();return true;}
@@ -140,14 +158,15 @@ export function snapshotProbeCommand({token,action}){
   throw new Error('Unknown snapshot probe command');
 }
 
-export async function createCaptionSource(page,{selector,captionSelector=null,captionMode='auto'}={}){
+export async function createCaptionSource(page,{selector,captionSelector=null,captionMode='auto',limits=RESOURCE_LIMITS}={}){
+  limits=resourceLimits(limits);
   if(!['auto','event','snapshot'].includes(captionMode))throw new Error('captionMode must be auto, event, or snapshot');
   let fallbackReason=null;
   if(captionMode!=='snapshot'){
-    const probe=await page.evaluate(installCaptionProbe,{selector,captionSelector,...(page.captionLeaseMs?{leaseMs:page.captionLeaseMs}:{})});
+    const probe=await page.evaluate(installCaptionProbe,{selector,captionSelector,maxCaptionBytes:limits.captionBytes,maxEventBytes:limits.eventBytes,maxQueueBytes:limits.queueBytes,maxPacketBytes:limits.packetBytes,...(page.captionLeaseMs?{leaseMs:page.captionLeaseMs}:{})});
     if(probe.available){
       return {kind:`event:${probe.source}`,fallbackReason:null,
-        assertCurrent:async()=>requireCurrent(await page.evaluate(captionProbeCommand,{token:probe.token,action:'read'})),
+        assertCurrent:async()=>requireCurrent(await page.evaluate(captionProbeCommand,{token:probe.token,action:'health'})),
         read:()=>page.evaluate(captionProbeCommand,{token:probe.token,action:'read'}),
         ack:through=>page.evaluate(captionProbeCommand,{token:probe.token,action:'ack',through}),
         stop:()=>page.evaluate(captionProbeCommand,{token:probe.token,action:'stop'}),
@@ -165,8 +184,12 @@ export async function createCaptionSource(page,{selector,captionSelector=null,ca
   return {kind:page.snapshotKind??'ego-accessibility-poll',fallbackReason,assertCurrent,
     async read(){
       await assertCurrent();
-      const observed=page.readCaptionSnapshot?await page.readCaptionSnapshot(selector):null;
-      const snapshot=observed?null:await page.snapshot(),state=observed?.state??parseSnapshot(snapshot);
+      const observed=page.readCaptionSnapshot?await page.readCaptionSnapshot(selector,limits.snapshotBytes):null;
+      if(observed&&(!Number.isSafeInteger(observed.rawBytes)||observed.rawBytes<0||observed.rawBytes>limits.snapshotBytes))throw new ResourceLimitError('snapshot-bytes');
+      const snapshot=observed?null:await page.snapshot();
+      if(snapshot!==null)checkText(snapshot,limits.snapshotBytes,'snapshot-bytes');
+      const state=observed?.state??parseSnapshot(snapshot);
+      checkText(state.caption,limits.captionBytes);
       await assertCurrent();
       return {healthy:state.playerFound,state,events:[{type:'caption',text:state.caption,mediaTime:state.mediaTime}],rawBytes:observed?.rawBytes??Buffer.byteLength(snapshot)};
     },

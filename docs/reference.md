@@ -2,6 +2,8 @@
 
 For first-time use, see the [English guide](../README.md) or [한국어 안내](../README.ko.md). This page keeps detailed CLI and maintainer reference material.
 
+**v0.10.1:** Caption/event/packet and cumulative capture storage limits now stop unsafe ingestion with `resource-limit`. Journal reads are bounded, including legacy rows. Startup and the guides explain which local evidence enters the host AI context. See [v0.10.1 release notes](releases/v0.10.1.md) and [data handling and limits](#data-handling-and-storage-limits).
+
 **v0.10:** `demo --serve` serves the bundled self-authored silent sample on localhost. Capture now reports `stopReason` and `completed`; `player-changed` is a detected boundary, not proof of completion. The original player/source is checked around caption reads and images, with generic observation failures still reported as interruptions. See [release validation](validation/2026-10-21-v010.md). Older version notes below describe their respective validation runs.
 
 An experimental local capture library and Codex/Claude Code skill for studying a subtitled lecture with an AI partner. The collector keeps repetitive browser observations out of the model context. The agent explains new evidence and writes combined notes.
@@ -11,7 +13,7 @@ An experimental local capture library and Codex/Claude Code skill for studying a
 Codex 또는 Claude Code와 Aside에 로그인되어 있다면, 강의 제목을 골라 시작할 수 있습니다. macOS/Linux용이며 Node/npm을 따로 설치할 필요가 없습니다. 앱 다운로드·첫 로그인 시간은 별도입니다.
 
 1. 스킬 설치기에서 이 저장소의 **`skills/lecture-companion` 폴더만 설치**하면 수집기·CLI·PNG 라이브러리까지 함께 준비됩니다. 별도로 저장소를 복제하거나 유지할 필요가 없습니다.
-2. 배포 ZIP을 직접 받은 경우에는 `lecture-companion-0.10.0.zip`을 풀고 아래 명령을 한 번 실행합니다. 일반 스킬 설치기를 사용했다면 이 단계는 필요 없습니다.
+2. 배포 ZIP을 직접 받은 경우에는 `lecture-companion-0.10.1.zip`을 풀고 아래 명령을 한 번 실행합니다. 일반 스킬 설치기를 사용했다면 이 단계는 필요 없습니다.
 
    ```sh
    /bin/sh lecture-companion/scripts/install.sh                     # Codex
@@ -185,3 +187,27 @@ It also reports `adapter`, `fallbackReason`, `captionEventsDropped`, `maxScreens
 Journal `wallTime` is the write time. Event captions also retain browser `observedAt` and observed media time. Snapshot fallback cannot read media time, so `mediaTime` stays null; captions shorter than its observation interval can be missed. No completeness percentage is claimed. A delayed read is uncertainty, not proof of missed speech; event mode may retain those captions in its queue. Black/protected video may prevent useful screenshots; never bypass player restrictions. The bottom 20% is excluded only from comparison, so changes entirely there can still be filtered, but saved images include the entire selected player. Tiny code edits/annotations may fall below the visual threshold.
 
 The library is MIT licensed. Lecture captions, images and generated private notes are not included in that license and should stay local. No public upload or repository publication is performed by the tool.
+
+## Data handling and storage limits
+
+Local capture and AI processing are separate steps. The collector writes observed captions, selected player PNGs and capture metadata to the selected local session. The worker reads caption batches and opens selected frames; the question chat reads fresh evidence, summaries and saved Q&A. These reads place their contents into the configured Codex/Claude Code model provider's context. A session's cumulative batches can contain substantial lecture content. The collector has no upload backend, telemetry or separate model API, but this host workflow is not offline. The startup notice includes `dataHandling.local`, `dataHandling.hostAI` and `collectorUploads: false` so the agent can explain the distinction before teaching begins.
+
+No audio is recorded or login cookies/passwords extracted. Visible personal information, instructor faces, secrets or confidential code in lecture captions/images are not automatically redacted. Aside's full-viewport screenshot passes transiently through local adapter/collector/image-worker memory before crop; only the selected processed player PNG is persisted. Host chats keep their normal tools and are not isolated OS principals. Provider storage/training settings follow the chosen account, not this library.
+
+New session directories/files use restrictive creation permissions, not encryption. Files remain until removed by the user. Stop the collector and related chats before deleting the intended session folder. This does not delete provider-side chat history or copies already exported elsewhere. Choose content you are authorized to process and check its terms before capture or sharing.
+
+Capture enforces these hard ceilings on the host, independently of model response budgets:
+
+| Resource | Maximum |
+| --- | --- |
+| Raw UTF-8 caption | 64 KiB |
+| Encoded event | 128 KiB |
+| Caption events per packet / encoded event-array bytes | 256 / 256 KiB |
+| Browser caption queue | 2,048 events and 512 KiB; dropped evidence is reported |
+| Raw accessibility snapshot before local parsing | 1 MiB |
+| Journal (including reserved terminal record) | 16 MiB |
+| Captured journal and PNG evidence combined | 128 MiB |
+
+Metadata, study/Q&A state, notes and exports are outside the capture evidence budget. The storage limits reserve 1 KiB for a terminal record; local disk exhaustion or an already oversized session may prevent that record, so `status.json` is written separately. Limits may be lowered through the library API but cannot be raised above the hard ceilings. They are bytes, not tokens. Oversized captions, invalid/non-progressing packets, excessive drain work or exhausted storage stop with `stopReason: resource-limit`, `completed: false`, and a safe limit code. Rejected content is not silently truncated or presented as complete evidence. Earlier accepted evidence and saved Q&A remain available for export when the journal is within the read limit.
+
+Every journal consumer uses a bounded reader, including legacy sessions and read-only context/export. A file over 16 MiB is refused before full-file allocation/JSON parsing and left untouched; oversized legacy rows/captions are also refused, including an otherwise repairable final row. The tool does not silently truncate or migrate rejected evidence. This is a fixed local processing ceiling, not streaming or a guarantee of a particular RAM footprint. Browser evaluation and screenshot APIs remain external boundaries; these controls do not sandbox the browser or host AI.

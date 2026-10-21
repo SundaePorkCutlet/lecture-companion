@@ -27,6 +27,7 @@ scripts/runtime/src/player-frame.mjs
 scripts/runtime/src/question-chat.mjs
 scripts/runtime/src/question-context.mjs
 scripts/runtime/src/questions-store.mjs
+scripts/runtime/src/resource-limits.mjs
 scripts/runtime/src/snapshot.mjs
 scripts/runtime/src/study-cli.mjs
 scripts/runtime/src/study-export.mjs

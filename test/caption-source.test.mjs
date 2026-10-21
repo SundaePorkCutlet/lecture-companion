@@ -14,3 +14,10 @@ test('browser evaluation failure propagates instead of pretending snapshot fallb
   const page={evaluate:async()=>{throw new Error('control lost');}};
   await assert.rejects(()=>createCaptionSource(page,{selector:'video'}),/control lost/);
 });
+
+test('Aside snapshots cannot bypass a caller-lowered raw snapshot budget',async()=>{
+  const page={snapshotKind:'aside-accessibility-poll',evaluate:async fn=>fn.name==='installSnapshotProbe'?{token:'fixture'}:{healthy:true},
+    readCaptionSnapshot:async()=>({state:{caption:'small',playerFound:true,mediaTime:null},rawBytes:2048})};
+  const source=await createCaptionSource(page,{selector:'video',captionMode:'snapshot',limits:{snapshotBytes:16}});
+  await assert.rejects(()=>source.read(),error=>error.code==='RESOURCE_LIMIT');
+});

@@ -1,4 +1,7 @@
+import {checkText,RESOURCE_LIMITS} from './resource-limits.mjs';
+
 export function parseSnapshot(snapshot){
+  checkText(snapshot,RESOURCE_LIMITS.snapshotBytes,'snapshot-bytes');
   if((snapshot.match(/region "video player"/g)??[]).length>1)throw new Error('Exactly one video player is supported');
   const lines=snapshot.split('\n'),start=lines.findIndex(l=>/region "video player"/.test(l));
   if(start<0)return {caption:'',mediaTime:null,playerFound:false,paused:null};
@@ -23,6 +26,7 @@ export function parseSnapshot(snapshot){
 // Aside snapshots use Playwright's indented ARIA representation. The caller
 // scopes the snapshot to the unique selected player, including its frame tree.
 export function parseAsideSnapshot(snapshot){
+  checkText(snapshot,RESOURCE_LIMITS.snapshotBytes,'snapshot-bytes');
   if(typeof snapshot!=='string')throw new Error('Invalid Aside snapshot');
   const texts=[],stack=[];let playerFound=false;
   const control=body=>/^(title|button|group|slider|menu|menuitem|listbox|option|textbox|combobox|checkbox|radio|switch|progressbar|toolbar|spinbutton)\b/.test(body);

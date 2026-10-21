@@ -14,7 +14,7 @@ function fixture({iframe=false,tracks=[]}={}){
   const doc={defaultView:view,querySelectorAll:s=>s==='video'?[video]:s==='#caption'?[caption]:[]};
   const video=Object.assign(new EventTarget(),{ownerDocument:doc,isConnected:true,textTracks:new TrackList(),currentSrc:'original.webm',currentTime:1.25,paused:true,playbackRate:1,ended:false,duration:20});
   const selected=iframe?{tagName:'IFRAME',isConnected:true,contentDocument:doc}:{tagName:'SECTION',isConnected:true,matches:()=>false,querySelectorAll:doc.querySelectorAll};
-  const window={};const context={window,document:{querySelectorAll:()=>[selected]},crypto:{randomUUID:()=> 'fixture-id'},setTimeout,clearTimeout};
+  const window={};const context={window,document:{querySelectorAll:()=>[selected]},crypto:{randomUUID:()=> 'fixture-id'},setTimeout,clearTimeout,TextEncoder};
   const install=args=>runInNewContext(`(${installCaptionProbe.toString()})(${JSON.stringify(args)})`,context);
   const command=args=>runInNewContext(`(${captionProbeCommand.toString()})(${JSON.stringify(args)})`,context);
   return {install,command,selected,doc,video,caption};
@@ -25,6 +25,33 @@ test('hidden metadata track cannot override visible DOM subtitles',()=>{
   const p=f.install({selector:'#player',captionSelector:'#caption'});
   try{assert.equal(p.source,'dom-mutation');assert.equal(f.command({token:p.token,action:'read'}).events[0].text,'visible subtitle');}
   finally{f.command({token:p.token,action:'close'});}
+});
+
+test('browser probe refuses oversized UTF-8 text rather than queueing or silently truncating it',()=>{
+  const f=fixture();f.caption.innerText='한글';
+  const p=f.install({selector:'#player',captionSelector:'#caption',maxCaptionBytes:16});
+  try{
+    f.caption.innerText='한'.repeat(6);f.video.dispatchEvent(new Event('timeupdate'));
+    const packet=f.command({token:p.token,action:'read'});
+    assert.equal(packet.failure,'resource-limit');assert.equal(packet.healthy,false);
+    assert.ok(!packet.events.some(e=>e.text==='한'.repeat(6)));
+  }finally{f.command({token:p.token,action:'close'});}
+});
+
+test('browser queue and returned packets are byte bounded while reporting dropped evidence',()=>{
+  const f=fixture(),p=f.install({selector:'#player',captionSelector:'#caption',maxQueueBytes:1200,maxPacketBytes:800});
+  try{
+    for(let i=0;i<20;i++){f.caption.innerText=`${i}:`+'a'.repeat(200);f.video.dispatchEvent(new Event('timeupdate'));}
+    let packet=f.command({token:p.token,action:'read'}),count=0;
+    assert.ok(packet.dropped>0);
+    while(packet.events.length){
+      assert.ok(Buffer.byteLength(JSON.stringify(packet.events))<=800);
+      count+=packet.events.length;
+      f.command({token:p.token,action:'ack',through:packet.events.at(-1).seq});
+      packet=f.command({token:p.token,action:'read'});
+    }
+    assert.ok(count<20);
+  }finally{f.command({token:p.token,action:'close'});}
 });
 
 test('navigation to a new iframe document invalidates an old still-connected video',()=>{

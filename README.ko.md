@@ -4,11 +4,11 @@
 
 **실험 버전 · Codex / Claude Code · Aside / ego · macOS / Linux**
 
-[English](README.md) · [v0.10 다운로드](https://github.com/SundaePorkCutlet/lecture-companion/releases/tag/v0.10.0) · [노트 예시](examples/containers/notes.md) · [기술 문서](docs/reference.md)
+[English](README.md) · [v0.10.1 다운로드](https://github.com/SundaePorkCutlet/lecture-companion/releases/tag/v0.10.1) · [노트 예시](examples/containers/notes.md) · [기술 문서](docs/reference.md)
 
 ## 시작하기
 
-1. 스킬 설치기로 **[`skills/lecture-companion` 폴더](https://github.com/SundaePorkCutlet/lecture-companion/tree/main/skills/lecture-companion)**를 설치하거나, [독립 설치 ZIP](https://github.com/SundaePorkCutlet/lecture-companion/releases/download/v0.10.0/lecture-companion-0.10.0.zip)을 받아 아래 설치 명령을 실행합니다. 수집기와 실행 코드가 들어 있어 저장소 전체를 따로 유지할 필요가 없습니다.
+1. 스킬 설치기로 **[`skills/lecture-companion` 폴더](https://github.com/SundaePorkCutlet/lecture-companion/tree/main/skills/lecture-companion)**를 설치하거나, [독립 설치 ZIP](https://github.com/SundaePorkCutlet/lecture-companion/releases/download/v0.10.1/lecture-companion-0.10.1.zip)을 받아 아래 설치 명령을 실행합니다. 수집기와 실행 코드가 들어 있어 저장소 전체를 따로 유지할 필요가 없습니다.
 2. Aside 또는 ego에서 강의를 열고 자막을 켭니다. 브라우저 로그인·프로필·CLI 연결을 먼저 마칩니다. 지원되는 호스트의 내장 런타임을 사용하므로 Node/npm을 따로 설치하지 않습니다.
 3. Codex에 다음을 입력합니다. ego를 쓰면 문장의 Aside를 ego로 바꿉니다.
 
@@ -37,6 +37,20 @@
 질문 예시: **“docker cp로 복사하면 다음 컨테이너가 사용할 이미지도 바뀌어?”**
 
 [최종 노트 예시](examples/containers/notes.md)는 읽기 형태를 보여주는 가상 예시입니다. 실제 사용자의 질문 기록이나 외부 강의 자료를 포함하지 않습니다.
+
+## 데이터 저장과 AI 전달
+
+**로컬 수집이 완전한 오프라인 AI 처리를 뜻하지는 않습니다.** 수집기 자체에는 업로드 서버나 모델 API가 없습니다. 다만 Codex·Claude Code가 세션을 읽으면 해당 내용이 설정된 AI 호스트·모델 제공자의 문맥에 들어가며, 계정 설정과 서비스 약관에 따라 처리됩니다.
+
+| 데이터 | 저장·전달 범위 |
+| --- | --- |
+| 관찰한 자막, 선택 플레이어 PNG, 시각·수집 상태 | 비공개 로컬 세션 파일에 저장합니다. |
+| 자막 배치, 에이전트가 여는 플레이어 이미지, 요약, 질문과 저장된 답변 | 강의 처리·질문 채팅과 해당 AI 제공자에 전달됩니다. 배치가 누적되면 강의 내용 상당량이 전달될 수 있습니다. |
+| 최종 노트·문답 | 로컬 파일로 내보냅니다. 작성에 사용한 내용은 호스트 채팅에서도 처리됩니다. 자동 공개 게시 기능은 없습니다. |
+
+음성은 녹음하지 않고, 수집기가 로그인 비밀번호나 쿠키를 추출하지 않습니다. 화면·자막에 보이는 이름, 얼굴, 이메일, 코드 등은 **자동으로 비식별화하지 않습니다.** Aside에서는 전체 뷰포트 이미지가 일시적으로 로컬 수집기·이미지 처리 프로세스를 거친 후 플레이어 영역으로 잘립니다. 저장되는 PNG는 선택 플레이어입니다. 별도 질문 채팅도 호스트의 일반 도구 권한을 가지므로 파일 접근을 격리하는 보안 장치는 아닙니다.
+
+처리할 권한이 있는 자료를 선택하고 강의 이용조건과 호스트의 보관·학습 설정을 확인하세요. 로컬 파일은 제한된 생성 권한을 갖는 평문이며 암호화되지 않습니다. 자동 삭제하지 않으므로 보관이 필요 없으면 수집과 관련 채팅을 종료한 뒤 해당 세션 폴더를 삭제하세요. 로컬 삭제는 AI 제공자의 채팅 기록을 삭제하지 않습니다. [저장 한도와 상세 동작](docs/reference.md#data-handling-and-storage-limits)도 확인하세요.
 
 ## 알아둘 점
 
